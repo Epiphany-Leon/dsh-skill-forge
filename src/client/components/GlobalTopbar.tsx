@@ -38,6 +38,7 @@ export function GlobalTopbar({
         className: `sf-topbar-icon-btn ${rightPanelOpen && activeTab === 'files' ? 'active' : ''}`,
         onClick: onToggleFiles,
         title: '文件浏览器',
+        'data-sf-toggle-sidebar': 'files',
       },
         React.createElement('svg', {
           width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none',
@@ -51,6 +52,7 @@ export function GlobalTopbar({
         className: `sf-topbar-icon-btn ${rightPanelOpen && activeTab === 'forge' ? 'active' : ''}`,
         onClick: onToggleForge,
         title: 'Skill Forge',
+        'data-sf-toggle-sidebar': 'forge',
       },
         React.createElement('svg', {
           width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none',

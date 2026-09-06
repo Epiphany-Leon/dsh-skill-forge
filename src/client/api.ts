@@ -91,4 +91,66 @@ export const api = {
   openFile: (path: string) =>
     request('/open-file', { method: 'POST', body: JSON.stringify({ path }) }),
   getWorkspaceInfo: () => request('/workspace-info'),
+
+  // ===== 达尔文模式 =====
+  darwinStart: (skillName: string, targetDimensions?: string[], autoApprove?: boolean) =>
+    request('/darwin-start', { method: 'POST', body: JSON.stringify({ skillName, targetDimensions, autoApprove }) }),
+  darwinStatus: (runId: string) =>
+    request(`/darwin-status?runId=${encodeURIComponent(runId)}`),
+  darwinApprove: (runId: string, dimension: string) =>
+    request('/darwin-approve', { method: 'POST', body: JSON.stringify({ runId, dimension }) }),
+  darwinReject: (runId: string, dimension: string, reason?: string) =>
+    request('/darwin-reject', { method: 'POST', body: JSON.stringify({ runId, dimension, reason }) }),
+  darwinStop: (runId: string) =>
+    request('/darwin-stop', { method: 'POST', body: JSON.stringify({ runId }) }),
+  darwinRuns: (limit = 20) =>
+    request(`/darwin-runs?limit=${limit}`),
+
+  // ===== 饕餮模式 =====
+  taotieDetect: (threshold?: number) =>
+    request(`/taotie-detect${threshold !== undefined ? `?threshold=${threshold}` : ''}`),
+  taotieAnalyze: (target: string, source: string) =>
+    request('/taotie-analyze', { method: 'POST', body: JSON.stringify({ target, source }) }),
+  taotieStart: (target: string, source: string, autoApprove?: boolean) =>
+    request('/taotie-start', { method: 'POST', body: JSON.stringify({ target, source, autoApprove }) }),
+  taotieStatus: (runId: string) =>
+    request(`/taotie-status?runId=${encodeURIComponent(runId)}`),
+  taotieApprove: (runId: string, stepIndex?: number) =>
+    request('/taotie-approve', { method: 'POST', body: JSON.stringify({ runId, stepIndex }) }),
+  taotieStop: (runId: string) =>
+    request('/taotie-stop', { method: 'POST', body: JSON.stringify({ runId }) }),
+  taotiePatterns: () =>
+    request('/taotie-patterns'),
+
+  // ===== CoEvo 共进化模式 =====
+  coevoStart: (skillName: string, options?: { autoApprove?: boolean; maxRounds?: number; targetSkillScore?: number; targetTestStrength?: number }) =>
+    request('/coevo-start', { method: 'POST', body: JSON.stringify({ skillName, ...options }) }),
+  coevoStatus: (runId: string) =>
+    request(`/coevo-status?runId=${encodeURIComponent(runId)}`),
+  coevoApprove: (runId: string) =>
+    request('/coevo-approve', { method: 'POST', body: JSON.stringify({ runId }) }),
+  coevoReject: (runId: string, reason?: string) =>
+    request('/coevo-reject', { method: 'POST', body: JSON.stringify({ runId, reason }) }),
+  coevoStop: (runId: string, reason?: string) =>
+    request('/coevo-stop', { method: 'POST', body: JSON.stringify({ runId, reason }) }),
+  coevoRuns: (limit = 20) =>
+    request(`/coevo-runs?limit=${limit}`),
+
+  // ===== 技能编排 =====
+  orchestrateTask: (query: string, mode?: 'fast' | 'llm' | 'auto') =>
+    request('/orchestrate', { method: 'POST', body: JSON.stringify({ task: query, mode }) }),
+  orchestratorStats: () =>
+    request('/orchestrator/stats'),
+
+  // ===== Dreaming 闲时锻造 =====
+  dreamingStart: (triggerType: 'manual' | 'scheduled' | 'idle' = 'manual') =>
+    request('/dreaming/start', { method: 'POST', body: JSON.stringify({ triggerType }) }),
+  dreamingStop: (reason?: string) =>
+    request('/dreaming/stop', { method: 'POST', body: JSON.stringify({ reason }) }),
+  dreamingStatus: () =>
+    request('/dreaming/status'),
+  dreamingHistory: (limit = 20) =>
+    request(`/dreaming/history?limit=${limit}`),
+  dreamingHealthReport: () =>
+    request('/dreaming/health-report'),
 }

@@ -46,3 +46,6 @@ forge-runs.json
 tmp/
 temp/
 *.tmp
+
+# Private social media assets
+assets/social/

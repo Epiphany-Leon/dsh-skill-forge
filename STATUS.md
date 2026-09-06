@@ -347,16 +347,70 @@
 - [x] CHANGELOG.md（v0.1.0 完整变更记录）
 
 #### 4.3 演示材料
-- [x] 项目 Logo（孵化蛋方向，6 张变体：深蓝/薄荷/赤陶/紫色/森林/芥黄）
-- [ ] README 头图 banner
+- [x] 项目 Logo（孵化蛋方向，11 张变体）
 - [x] 社媒宣传素材：
-  - banner.html（GitHub 发布 Banner，1200×630，深色科技风 + 孵化蛋 Logo）
-  - features.html（七大特性长图，1080×1440，深色卡片式）
-  - xiaohongshu.html（小红书风格宣传图，1080×1440，暖黄治愈风）
-  - copy.md（各平台发布文案：GitHub README / 小红书 / 朋友圈 / 技术亮点 / 致谢）
+  - banner.html（GitHub 发布 Banner）
+  - features.html（七大特性长图）
+  - xiaohongshu.html（小红书风格宣传图）
+  - copy.md（各平台发布文案）
+  - xhs_01_intro.jpg / xhs_02_features.jpg / xhs_03_end.jpg（小红书三连图，AI 生图，3:4）
+  - ⚠️ 社媒素材为私有，不进公开仓库（已加入 .gitignore）
 
 #### 4.4 发布准备
-- [ ] npm 包准备
-- [ ] .npmignore
-- [ ] LICENSE（MIT）
-- [ ] GitHub 仓库初始化
+- [x] .gitignore 完整配置
+- [x] .npmignore
+- [x] LICENSE（MIT）
+- [x] CONTRIBUTING.md 贡献指南
+- [x] GitHub 公开仓库：https://github.com/Epiphany-Leon/dsh-skill-forge
+- [x] 10 个话题标签（dsh-plugin / deepseek-harness / skill-forge 等）
+- [x] GitHub Release v0.1.0（中英双语）
+- [ ] npm 包发布（需要 2FA OTP，暂跳过，用户手动发布或用 token）
+- [x] README 双语言切换（英文主文档 + 中文链接跳转）
+- [x] Roadmap 更新（Phase 0-4 完成，Phase 5-6 规划）
+
+#### 4.5 社区发布
+- [ ] npm 发布
+- [ ] 社区宣传
+
+---
+
+## Phase 5：技能进化与自我完善 ✅ 完成
+
+- [x] 奖励驱动的技能权重自调整（MemoraX 借鉴时已完成）
+- [x] 增量式经验积累触发（MemoraX 借鉴时已完成）
+- [x] 单体技能爬山优化（达尔文模式）— 10 维度评估 + 爬山循环 + ratchet 回滚 + 人在回路
+- [x] 技能融合（饕餮模式）— 5 阶段融合 + 模式沉淀 + 严格不回退
+- [x] UI：侧栏设置齿轮 + 快速设置面板
+- [x] UI：点击外部自动收起侧栏
+- [x] UI：挤压模式（可选，实验性）
+- [x] 设置页：改用 HTTP API，7 大分组 + 可折叠 + 功能概览
+
+---
+
+## Phase 6：多 Agent 协作深化 ✅ 完成
+
+### 6.1 共进化验证（CoEvo 模式） ✅
+- [x] AdversarialTestGenerator — 6 种对抗性测试类型（边界/反例/fuzz/安全边界/跨场景/矛盾）
+- [x] CoEvoOrchestrator — 双循环：奇数轮技能进化，偶数轮测试进化
+- [x] 测试套件强度评估 + 弱用例淘汰
+- [x] 人在回路 + 终止条件（双方达标/连续停滞/最大轮数）
+- [x] 持久化 coevo-runs.json
+- [x] 7 个 HTTP API
+
+### 6.2 Dreaming 闲时锻造 ✅
+- [x] 技能库健康体检（质量分布/使用率/僵尸技能/重复率）
+- [x] 低分技能批量优化（调用 DarwinOptimizer，并发受限）
+- [x] 相似技能自动融合（调用 TaotieFusion，按相似度排序）
+- [x] 改进建议生成（启发式，零 LLM 消耗）
+- [x] 三种触发：手动 / 定时 cron / 空闲触发
+- [x] 永不自动删除 + 严格不回退 + 可中断
+- [x] 5 个 HTTP API
+
+### 6.3 技能组合编排（SkillOrchestrator） ✅
+- [x] TaskDecomposer — 任务分解（fast/llm/auto 三模式，9 种任务类别）
+- [x] WorkflowBuilder — 技能匹配 + 拓扑排序 + 循环依赖检测
+- [x] 工作流置信度计算 + 缓存
+- [x] 动态注册工作流所需技能
+- [x] 生成 Markdown 执行指南
+- [x] DSH 工具注册：orchestrate_skills
+- [x] 2 个 HTTP API

@@ -156,15 +156,15 @@ dsh-skill-forge/
 - [x] **Phase 2**: Verification loop and iterative optimization (core quality gates)
 - [x] **Phase 3**: Skill library governance and smart recall
 - [x] **Phase 4**: Productization and open-source release (current)
-- [ ] **Phase 5**: Skill evolution and self-improvement
-  - [ ] Reward-driven skill weight auto-adjustment
-  - [ ] Incremental experience accumulation trigger
-  - [ ] Skill fusion (TaoTie mode)
-  - [ ] Single skill hill-climbing optimization (Darwin mode)
-- [ ] **Phase 6**: Multi-agent collaboration deepening
-  - [ ] Surrogate Verifier (CoEvoSkills mode)
-  - [ ] Dreaming mode — batch forging during idle time
-  - [ ] Cross-session memory integration
+- [x] **Phase 5**: Skill evolution and self-improvement
+  - [x] Reward-driven skill weight auto-adjustment
+  - [x] Incremental experience accumulation trigger
+  - [x] Skill fusion (TaoTie mode) — 5-stage cross-skill advantage fusion
+  - [x] Single skill hill-climbing optimization (Darwin mode) — 10-dimension evaluation
+- [x] **Phase 6**: Multi-agent collaboration deepening
+  - [x] Co-evolutionary verification (CoEvo mode) — skills vs adversarial test cases, double-loop evolution
+  - [x] Dreaming mode — batch optimization, auto-fusion, and health check during idle time
+  - [x] Skill orchestration — multi-skill workflow decomposition, matching, and execution guide generation
 
 ---
 

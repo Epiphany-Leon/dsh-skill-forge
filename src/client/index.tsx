@@ -29,12 +29,16 @@ interface GlobalState {
   rightOpen: boolean
   activeTab: 'files' | 'forge'
   width: number
+  clickOutsideToClose: boolean
+  squeezeMode: boolean // 挤压模式：true=向左挤压主内容，false=悬浮覆盖
 }
 
 const state: GlobalState = {
   rightOpen: false,
   activeTab: 'forge',
   width: 380,
+  clickOutsideToClose: true,
+  squeezeMode: false, // 默认悬浮模式，避免 DSH DOM 重建
 }
 
 const listeners = new Set<() => void>()
@@ -94,6 +98,13 @@ function observeAndInjectButton(): void {
 }
 
 function injectUI(): void {
+  // 暴露全局状态给设置面板等组件读写
+  ;(window as any).__sf_state = state
+  ;(window as any).__sf_notify = () => {
+    listeners.forEach(l => l())
+    updateLayout()
+  }
+
   // 创建顶栏容器
   const topbarEl = document.createElement('div')
   topbarEl.id = 'sf-topbar-root'
@@ -111,6 +122,9 @@ function injectUI(): void {
 
   // 给 DSH 主容器加类名，实现挤压效果
   addLayoutClasses()
+
+  // 初始化点击外部关闭
+  setupClickOutside()
 
   // 渲染顶栏
   const topbarRoot = createRoot(topbarEl)
@@ -298,6 +312,7 @@ function TopbarApp(): React.ReactElement {
 /** 侧栏 React App */
 function SidebarApp(): React.ReactElement {
   const [, forceUpdate] = useState(0)
+  const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => {
     return subscribe(() => forceUpdate(n => n + 1))
@@ -312,6 +327,10 @@ function SidebarApp(): React.ReactElement {
     updateLayout()
   }, [])
 
+  const handleToggleSettings = useCallback(() => {
+    setShowSettings(s => !s)
+  }, [])
+
   if (!state.rightOpen) {
     return React.createElement('div', { style: { display: 'none' } })
   }
@@ -321,6 +340,8 @@ function SidebarApp(): React.ReactElement {
     width: state.width,
     onTabChange: handleTabChange,
     onWidthChange: handleWidthChange,
+    showSettings,
+    onToggleSettings: handleToggleSettings,
   })
 }
 
@@ -342,14 +363,83 @@ function ToastApp(): React.ReactElement {
 
 /** 更新布局：根据侧栏宽度调整主内容区 */
 function updateLayout(): void {
-  const root = document.querySelector('.sf-app-root') as HTMLElement
-  if (!root) return
+  if (state.squeezeMode) {
+    // 挤压模式：找 DSH 主容器，给它加 padding-right
+    const mainContainer = findDSHMainContainer()
+    if (mainContainer) {
+      if (state.rightOpen) {
+        mainContainer.style.paddingRight = `${state.width}px`
+        mainContainer.style.transition = 'padding-right 0.2s ease'
+      } else {
+        mainContainer.style.paddingRight = '0px'
+      }
+    }
+  }
+  // 悬浮模式：不需要改布局，fixed 定位即可
 
-  if (state.rightOpen) {
-    root.style.paddingRight = `${state.width}px`
-    document.body.classList.add('sf-sidebar-open')
-  } else {
-    root.style.paddingRight = '0px'
-    document.body.classList.remove('sf-sidebar-open')
+  // 顶栏同步挤压（如果有主内容区）
+  const topbarContent = document.querySelector('.sf-topbar-center') as HTMLElement
+  if (topbarContent && state.squeezeMode && state.rightOpen) {
+    topbarContent.style.paddingRight = `${state.width}px`
+  } else if (topbarContent) {
+    topbarContent.style.paddingRight = '0px'
+  }
+}
+
+/** 查找 DSH 主内容容器（用于挤压模式） */
+function findDSHMainContainer(): HTMLElement | null {
+  // 策略 1：找 DSH 的 main 区域
+  const selectors = [
+    '[class*="main"]',
+    '[class*="content"]',
+    'main',
+    '#root > div',
+    'body > div:first-child',
+  ]
+  for (const sel of selectors) {
+    const el = document.querySelector(sel) as HTMLElement
+    if (el && el.offsetWidth > 500 && !el.closest('#sf-rightsidebar-root') && !el.closest('#sf-topbar-root')) {
+      return el
+    }
+  }
+  return null
+}
+
+/** 设置点击外部关闭监听 */
+let clickOutsideHandler: ((e: MouseEvent) => void) | null = null
+
+function setupClickOutside(): void {
+  if (clickOutsideHandler) return
+
+  clickOutsideHandler = (e: MouseEvent) => {
+    if (!state.rightOpen) return
+    if (!state.clickOutsideToClose) return
+
+    const target = e.target as Node
+    const sidebarRoot = document.getElementById('sf-rightsidebar-root')
+    const topbarRoot = document.getElementById('sf-topbar-root')
+    const toastRoot = document.getElementById('sf-toast-root')
+
+    // 点击在侧栏/顶栏/Toast 内部，不关闭
+    if (sidebarRoot?.contains(target)) return
+    if (topbarRoot?.contains(target)) return
+    if (toastRoot?.contains(target)) return
+
+    // 点击了触发打开侧栏的按钮，不关闭（让按钮自己处理）
+    const targetEl = e.target as HTMLElement
+    if (targetEl.closest?.('[data-sf-toggle-sidebar]')) return
+
+    // 点击外部，关闭侧栏
+    setState({ rightOpen: false })
+    updateLayout()
+  }
+
+  document.addEventListener('mousedown', clickOutsideHandler, true)
+}
+
+function teardownClickOutside(): void {
+  if (clickOutsideHandler) {
+    document.removeEventListener('mousedown', clickOutsideHandler, true)
+    clickOutsideHandler = null
   }
 }

@@ -11,10 +11,12 @@ import { join, resolve, basename } from 'node:path'
 import { exec } from 'node:child_process'
 import type { ForgeOrchestrator } from './ForgeOrchestrator.js'
 import type { SkillRegistry } from './SkillRegistry.js'
+import type { TaotieFusion } from './TaotieFusion.js'
 
 interface ApiDeps {
   orchestrator: ForgeOrchestrator
   registry: SkillRegistry
+  taotie?: TaotieFusion
   getConfig?: () => any
   updateConfig?: (updates: Record<string, any>) => boolean
 }
@@ -496,6 +498,161 @@ export function registerForgeRoutes(deps: ApiDeps): { unregister: () => void } {
         }
       },
     },
+
+    // ============================================================
+    // 饕餮模式（Taotie Fusion）—— 跨技能优势吸收融合系统
+    // ============================================================
+
+    // GET /api/skill-forge/taotie-detect — 检测相似技能组
+    {
+      kind: 'exact' as const,
+      path: '/api/skill-forge/taotie-detect',
+      handler: (req: IncomingMessage, res: ServerResponse) => {
+        if (req.method !== 'GET') { res.writeHead(405).end(); return }
+        try {
+          if (!deps.taotie) { json(res, { error: 'Taotie fusion not available' }, 503); return }
+          const url = new URL(req.url!, `http://${req.headers.host}`)
+          const thresholdParam = url.searchParams.get('threshold')
+          const threshold = thresholdParam ? parseFloat(thresholdParam) : undefined
+          const groups = deps.taotie.detectSimilarSkills(threshold)
+          json(res, { groups })
+        } catch (e) {
+          json(res, { error: (e as Error).message }, 500)
+        }
+      },
+    },
+
+    // POST /api/skill-forge/taotie-analyze — 配对分析
+    {
+      kind: 'exact' as const,
+      path: '/api/skill-forge/taotie-analyze',
+      handler: async (req: IncomingMessage, res: ServerResponse) => {
+        if (req.method !== 'POST') { res.writeHead(405).end(); return }
+        try {
+          if (!deps.taotie) { json(res, { error: 'Taotie fusion not available' }, 503); return }
+          const body = await parseBody(req)
+          const { target, source } = body
+          if (!target || !source) {
+            json(res, { error: 'target and source are required' }, 400)
+            return
+          }
+          const report = await deps.taotie.analyzePair(target, source)
+          json(res, { report })
+        } catch (e) {
+          json(res, { error: (e as Error).message }, 500)
+        }
+      },
+    },
+
+    // POST /api/skill-forge/taotie-start — 启动融合
+    {
+      kind: 'exact' as const,
+      path: '/api/skill-forge/taotie-start',
+      handler: async (req: IncomingMessage, res: ServerResponse) => {
+        if (req.method !== 'POST') { res.writeHead(405).end(); return }
+        try {
+          if (!deps.taotie) { json(res, { error: 'Taotie fusion not available' }, 503); return }
+          const body = await parseBody(req)
+          const { target, source, autoApprove } = body
+          if (!target || !source) {
+            json(res, { error: 'target and source are required' }, 400)
+            return
+          }
+          const result = await deps.taotie.startFusion(target, source, autoApprove ?? false)
+          json(res, result)
+        } catch (e) {
+          json(res, { error: (e as Error).message }, 500)
+        }
+      },
+    },
+
+    // GET /api/skill-forge/taotie-status — 查看融合进度
+    {
+      kind: 'exact' as const,
+      path: '/api/skill-forge/taotie-status',
+      handler: (req: IncomingMessage, res: ServerResponse) => {
+        if (req.method !== 'GET') { res.writeHead(405).end(); return }
+        try {
+          if (!deps.taotie) { json(res, { error: 'Taotie fusion not available' }, 503); return }
+          const url = new URL(req.url!, `http://${req.headers.host}`)
+          const runId = url.searchParams.get('runId')
+          if (!runId) {
+            // 返回最近的运行列表
+            const limit = parseInt(url.searchParams.get('limit') || '20')
+            json(res, { runs: deps.taotie.listRuns(limit) })
+            return
+          }
+          const run = deps.taotie.getRunStatus(runId)
+          if (!run) {
+            json(res, { error: 'Run not found' }, 404)
+            return
+          }
+          json(res, { run })
+        } catch (e) {
+          json(res, { error: (e as Error).message }, 500)
+        }
+      },
+    },
+
+    // POST /api/skill-forge/taotie-approve — 批准当前步骤继续
+    {
+      kind: 'exact' as const,
+      path: '/api/skill-forge/taotie-approve',
+      handler: async (req: IncomingMessage, res: ServerResponse) => {
+        if (req.method !== 'POST') { res.writeHead(405).end(); return }
+        try {
+          if (!deps.taotie) { json(res, { error: 'Taotie fusion not available' }, 503); return }
+          const body = await parseBody(req)
+          const { runId, step } = body
+          if (!runId) {
+            json(res, { error: 'runId is required' }, 400)
+            return
+          }
+          const ok = await deps.taotie.approveStep(runId, step)
+          json(res, { ok })
+        } catch (e) {
+          json(res, { error: (e as Error).message }, 500)
+        }
+      },
+    },
+
+    // POST /api/skill-forge/taotie-stop — 停止融合
+    {
+      kind: 'exact' as const,
+      path: '/api/skill-forge/taotie-stop',
+      handler: async (req: IncomingMessage, res: ServerResponse) => {
+        if (req.method !== 'POST') { res.writeHead(405).end(); return }
+        try {
+          if (!deps.taotie) { json(res, { error: 'Taotie fusion not available' }, 503); return }
+          const body = await parseBody(req)
+          const { runId } = body
+          if (!runId) {
+            json(res, { error: 'runId is required' }, 400)
+            return
+          }
+          const ok = deps.taotie.stopRun(runId)
+          json(res, { ok })
+        } catch (e) {
+          json(res, { error: (e as Error).message }, 500)
+        }
+      },
+    },
+
+    // GET /api/skill-forge/taotie-patterns — 获取全局模式库
+    {
+      kind: 'exact' as const,
+      path: '/api/skill-forge/taotie-patterns',
+      handler: (req: IncomingMessage, res: ServerResponse) => {
+        if (req.method !== 'GET') { res.writeHead(405).end(); return }
+        try {
+          if (!deps.taotie) { json(res, { error: 'Taotie fusion not available' }, 503); return }
+          const patterns = deps.taotie.getGlobalPatterns()
+          json(res, { patterns })
+        } catch (e) {
+          json(res, { error: (e as Error).message }, 500)
+        }
+      },
+    },
   ]
 
   // 注册路由（需要 ctx.webServer 的引用）
@@ -539,6 +696,30 @@ export const FORGE_ROUTES = [
   { kind: 'exact' as const, path: '/api/skill-forge/skill-diff' },
   { kind: 'exact' as const, path: '/api/skill-forge/skill-related' },
   { kind: 'exact' as const, path: '/api/skill-forge/workspace-info' },
+  // 饕餮模式
+  { kind: 'exact' as const, path: '/api/skill-forge/taotie-detect' },
+  { kind: 'exact' as const, path: '/api/skill-forge/taotie-analyze' },
+  { kind: 'exact' as const, path: '/api/skill-forge/taotie-start' },
+  { kind: 'exact' as const, path: '/api/skill-forge/taotie-status' },
+  { kind: 'exact' as const, path: '/api/skill-forge/taotie-approve' },
+  { kind: 'exact' as const, path: '/api/skill-forge/taotie-stop' },
+  { kind: 'exact' as const, path: '/api/skill-forge/taotie-patterns' },
+  // 达尔文模式
+  { kind: 'exact' as const, path: '/api/skill-forge/darwin-start' },
+  { kind: 'exact' as const, path: '/api/skill-forge/darwin-status' },
+  { kind: 'exact' as const, path: '/api/skill-forge/darwin-approve' },
+  { kind: 'exact' as const, path: '/api/skill-forge/darwin-reject' },
+  { kind: 'exact' as const, path: '/api/skill-forge/darwin-stop' },
+  { kind: 'exact' as const, path: '/api/skill-forge/darwin-runs' },
+  // 技能编排
+  { kind: 'exact' as const, path: '/api/skill-forge/orchestrate' },
+  { kind: 'exact' as const, path: '/api/skill-forge/orchestrator/stats' },
+  // Dreaming 闲时锻造
+  { kind: 'exact' as const, path: '/api/skill-forge/dreaming/start' },
+  { kind: 'exact' as const, path: '/api/skill-forge/dreaming/stop' },
+  { kind: 'exact' as const, path: '/api/skill-forge/dreaming/status' },
+  { kind: 'exact' as const, path: '/api/skill-forge/dreaming/history' },
+  { kind: 'exact' as const, path: '/api/skill-forge/dreaming/health-report' },
 ]
 
 /**

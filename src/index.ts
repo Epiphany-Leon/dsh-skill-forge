@@ -16,10 +16,16 @@ import { SkillRegistry } from './services/SkillRegistry.js'
 import { SecurityAuditor } from './services/SecurityAuditor.js'
 import { SkillForgeService, type ServiceDeps } from './services/SkillForgeService.js'
 import { InjectionEngine } from './services/InjectionEngine.js'
+import { TaotieFusion } from './services/TaotieFusion.js'
+import { DarwinOptimizer } from './services/DarwinOptimizer.js'
+import { CoEvoOrchestrator } from './services/CoEvoOrchestrator.js'
+import { DreamingEngine } from './services/DreamingEngine.js'
+import { SkillOrchestrator } from './services/SkillOrchestrator.js'
 import { ExtractorAgent } from './agents/ExtractorAgent.js'
 import { GeneratorAgent } from './agents/GeneratorAgent.js'
 import { VerifierAgent } from './agents/VerifierAgent.js'
 import { RefinerAgent } from './agents/RefinerAgent.js'
+import { AdversarialTestGenerator } from './agents/AdversarialTestGenerator.js'
 import { readdirSync, statSync, existsSync } from 'node:fs'
 import { join, resolve, isAbsolute } from 'node:path'
 import { exec } from 'node:child_process'
@@ -64,6 +70,41 @@ export interface Config {
   dailyDecayRate: number
   feedbackScoreWeight: number
   usageScoreWeight: number
+  // ---- 饕餮模式 ----
+  taotieEnabled: boolean
+  taotieAutoDetect: boolean
+  taotieSimilarityThreshold: number
+  taotieMaxInjectionSteps: number
+  taotieMinImprovementThreshold: number
+  taotieAutoApprove: boolean
+  // ---- 达尔文模式 ----
+  darwinMaxIterations: number
+  darwinHighScoreThreshold: number
+  darwinAutoApprove: boolean
+  // ---- CoEvo 共进化模式 ----
+  coevoEnabled: boolean
+  coevoMaxRounds: number
+  coevoTargetSkillScore: number
+  coevoTargetTestStrength: number
+  coevoInitialTestCount: number
+  coevoMaxTestCases: number
+  coevoTestsPerRound: number
+  coevoAutoApprove: boolean
+  coevoTestPruneThreshold: number
+  // ---- Dreaming 闲时锻造 ----
+  dreamingIdleThresholdMinutes: number
+  dreamingMaxConcurrentOptimizations: number
+  dreamingAutoOptimizeThreshold: number
+  dreamingAutoFusion: boolean
+  dreamingAutoArchiveDays: number
+  dreamingMaxSuggestions: number
+  dreamingDarwinAutoApprove: boolean
+  dreamingTaotieAutoApprove: boolean
+  // ---- 技能编排 ----
+  orchestrationEnabled: boolean
+  orchestrationDecomposeMode: 'fast' | 'llm' | 'auto'
+  orchestrationMatchThreshold: number
+  orchestrationMaxSkills: number
 }
 
 export const Config = Schema.object({
@@ -103,6 +144,45 @@ export const Config = Schema.object({
   dailyDecayRate: Schema.number().default(0.05).min(0).max(0.5),
   feedbackScoreWeight: Schema.number().default(0.15).min(0).max(0.5),
   usageScoreWeight: Schema.number().default(0.1).min(0).max(0.5),
+  // ---- 饕餮模式 ----
+  taotieEnabled: Schema.boolean().default(true),
+  taotieAutoDetect: Schema.boolean().default(true),
+  taotieSimilarityThreshold: Schema.number().default(0.4).min(0).max(1),
+  taotieMaxInjectionSteps: Schema.number().default(5).min(1).max(20),
+  taotieMinImprovementThreshold: Schema.number().default(0.02).min(0).max(0.5),
+  taotieAutoApprove: Schema.boolean().default(false),
+  // ---- 达尔文模式 ----
+  darwinMaxIterations: Schema.number().default(10).min(1).max(50),
+  darwinHighScoreThreshold: Schema.number().default(0.85).min(0.5).max(1.0),
+  darwinAutoApprove: Schema.boolean().default(false),
+  // ---- CoEvo 共进化模式 ----
+  coevoEnabled: Schema.boolean().default(true),
+  coevoMaxRounds: Schema.number().default(8).min(1).max(30),
+  coevoTargetSkillScore: Schema.number().default(0.85).min(0.5).max(1.0),
+  coevoTargetTestStrength: Schema.number().default(0.7).min(0.3).max(1.0),
+  coevoInitialTestCount: Schema.number().default(6).min(3).max(20),
+  coevoMaxTestCases: Schema.number().default(20).min(5).max(50),
+  coevoTestsPerRound: Schema.number().default(3).min(1).max(10),
+  coevoAutoApprove: Schema.boolean().default(false),
+  coevoTestPruneThreshold: Schema.number().default(0.9).min(0.5).max(1.0),
+  // ---- Dreaming 闲时锻造 ----
+  dreamingIdleThresholdMinutes: Schema.number().default(0).min(0).max(480), // 0 = disabled
+  dreamingMaxConcurrentOptimizations: Schema.number().default(2).min(1).max(10),
+  dreamingAutoOptimizeThreshold: Schema.number().default(0.0).min(0).max(1.0), // 0 = disabled
+  dreamingAutoFusion: Schema.boolean().default(false),
+  dreamingAutoArchiveDays: Schema.number().default(0).min(0).max(365), // 0 = disabled
+  dreamingMaxSuggestions: Schema.number().default(10).min(1).max(50),
+  dreamingDarwinAutoApprove: Schema.boolean().default(true),
+  dreamingTaotieAutoApprove: Schema.boolean().default(false),
+  // ---- 技能编排 ----
+  orchestrationEnabled: Schema.boolean().default(true),
+  orchestrationDecomposeMode: Schema.union([
+    Schema.const('fast'),
+    Schema.const('llm'),
+    Schema.const('auto'),
+  ]).default('auto'),
+  orchestrationMatchThreshold: Schema.number().default(0.25).min(0).max(1),
+  orchestrationMaxSkills: Schema.number().default(5).min(1).max(20),
 })
 
 // ============================================================
@@ -163,8 +243,30 @@ export function apply(ctx: Context, config: Config) {
       orchestrator.recordInjection(skillCount, isIntentAware)
     },
   })
+  const taotie = new TaotieFusion(ctx, config, registry, verifier)
+  const darwin = new DarwinOptimizer(ctx, config, {
+    registry,
+    verifier,
+    refiner,
+  })
+  const adversarial = new AdversarialTestGenerator(ctx, config)
+  const coevo = new CoEvoOrchestrator(ctx, config, {
+    registry,
+    verifier,
+    refiner,
+    adversarial,
+  })
+  const dreaming = new DreamingEngine(ctx, config, {
+    registry,
+    darwin,
+    taotie,
+    verifier,
+  })
+  const skillOrchestrator = new SkillOrchestrator(ctx, config, registry, {
+    injectionEngine: injection,
+  })
   const service = new SkillForgeService(ctx, config, {
-    orchestrator, registry,
+    orchestrator, registry, taotie, dreaming, skillOrchestrator,
   } as ServiceDeps)
 
   // ---- 注册 forge_skill 工具 ----
@@ -187,6 +289,49 @@ export function apply(ctx: Context, config: Config) {
     async execute(args: { reason: string }) {
       const result = await orchestrator.startManualForge(args.reason)
       return JSON.stringify(result)
+    },
+  }))
+
+  // ---- 注册 orchestrate_skills 工具 ----
+  ctx.tools.register(defineTool({
+    name: 'orchestrate_skills',
+    description: 'Compose a multi-skill workflow for a complex task. Analyzes the task, breaks it into subtasks, matches each subtask to the best available skill, and generates an execution guide. Use when a task requires multiple skills working together in sequence.',
+    parameters: {
+      task: {
+        type: 'string',
+        required: true,
+        description: 'The complex task to orchestrate a skill workflow for',
+      },
+      mode: {
+        type: 'string',
+        description: 'Decomposition mode: fast (heuristic), llm (deep analysis), or auto (default)',
+      },
+    },
+    output: {
+      schema: { type: 'json' } as any,
+      render(_args: unknown, value: unknown): Array<{ type: 'text'; text: string }> {
+        return [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value) }]
+      },
+    },
+    async execute(args: { task: string; mode?: string }) {
+      const mode = (args.mode || 'auto') as 'fast' | 'llm' | 'auto'
+      const result = await skillOrchestrator.orchestrate(args.task, { mode })
+      // 自动注入匹配到的技能
+      if (result.skillIdsToInject.length > 0) {
+        await skillOrchestrator.injectWorkflowSkills(result.workflow)
+      }
+      return JSON.stringify({
+        workflowId: result.workflow.id,
+        totalSteps: result.workflow.totalNodes,
+        matchedSkills: result.workflow.matchedNodes,
+        unmatchedSteps: result.workflow.unmatchedNodes,
+        confidence: result.workflow.confidence,
+        estimatedTokens: result.estimatedTokens,
+        executionGuide: result.executionGuide,
+        matchedSkillNames: result.workflow.nodes
+          .filter(n => n.matchedSkill)
+          .map(n => n.matchedSkill!.skill.frontmatter.name),
+      })
     },
   }))
 
@@ -601,8 +746,133 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
+    // ============================================================
+    // 饕餮模式（Taotie Fusion）
+    // ============================================================
+    '/api/skill-forge/taotie-detect': (req: any, res: any) => {
+      if (req.method !== 'GET') { res.writeHead(405).end(); return }
+      try {
+        const url = new URL(req.url!, `http://${req.headers.host}`)
+        const thresholdParam = url.searchParams.get('threshold')
+        const threshold = thresholdParam ? parseFloat(thresholdParam) : undefined
+        const groups = taotie.detectSimilarSkills(threshold)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ groups }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/taotie-analyze': async (req: any, res: any) => {
+      if (req.method !== 'POST') { res.writeHead(405).end(); return }
+      try {
+        const body = await readBody(req)
+        const { target, source } = body
+        if (!target || !source) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'target and source are required' }))
+          return
+        }
+        const report = await taotie.analyzePair(target, source)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ report }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/taotie-start': async (req: any, res: any) => {
+      if (req.method !== 'POST') { res.writeHead(405).end(); return }
+      try {
+        const body = await readBody(req)
+        const { target, source, autoApprove } = body
+        if (!target || !source) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'target and source are required' }))
+          return
+        }
+        const result = await taotie.startFusion(target, source, autoApprove ?? false)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(result))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/taotie-status': (req: any, res: any) => {
+      if (req.method !== 'GET') { res.writeHead(405).end(); return }
+      try {
+        const url = new URL(req.url!, `http://${req.headers.host}`)
+        const runId = url.searchParams.get('runId')
+        if (!runId) {
+          const limit = parseInt(url.searchParams.get('limit') || '20')
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ runs: taotie.listRuns(limit) }))
+          return
+        }
+        const run = taotie.getRunStatus(runId)
+        if (!run) {
+          res.writeHead(404, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Run not found' }))
+          return
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ run }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/taotie-approve': async (req: any, res: any) => {
+      if (req.method !== 'POST') { res.writeHead(405).end(); return }
+      try {
+        const body = await readBody(req)
+        const { runId, step, stepIndex } = body
+        if (!runId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'runId is required' }))
+          return
+        }
+        // 同时兼容 step 和 stepIndex 参数名
+        const stepValue = step !== undefined ? step : stepIndex
+        const ok = await taotie.approveStep(runId, stepValue)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/taotie-stop': async (req: any, res: any) => {
+      if (req.method !== 'POST') { res.writeHead(405).end(); return }
+      try {
+        const body = await readBody(req)
+        const { runId } = body
+        if (!runId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'runId is required' }))
+          return
+        }
+        const ok = taotie.stopRun(runId)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/taotie-patterns': (_req: any, res: any) => {
+      if (_req.method !== 'GET') { res.writeHead(405).end(); return }
+      try {
+        const patterns = taotie.getGlobalPatterns()
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ patterns }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
     '/api/skill-forge/config': async (req: any, res: any) => {
-      // GET — 获取配置
       if (req.method === 'GET') {
         try {
           res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -757,6 +1027,333 @@ export function apply(ctx: Context, config: Config) {
         configWorkspaceRoot: config.workspaceRoot || '',
       }))
     },
+    // ============================================================
+    // 达尔文模式（Darwin Mode）—— 单体技能爬山优化系统
+    // ============================================================
+    '/api/skill-forge/darwin-start': async (req: any, res: any) => {
+      if (req.method !== 'POST') { res.writeHead(405).end(); return }
+      try {
+        const body = await readBody(req)
+        const { skillName, targetDimensions, autoApprove } = body
+        if (!skillName) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'skillName is required' }))
+          return
+        }
+        const result = await darwin.startOptimization(
+          skillName,
+          Array.isArray(targetDimensions) ? targetDimensions : undefined,
+          typeof autoApprove === 'boolean' ? autoApprove : undefined,
+        )
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(result))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/darwin-status': async (req: any, res: any) => {
+      if (req.method !== 'GET') { res.writeHead(405).end(); return }
+      try {
+        const url = new URL(req.url!, `http://${req.headers.host}`)
+        const runId = url.searchParams.get('runId')
+        if (!runId) {
+          // 返回最近运行列表
+          const limit = parseInt(url.searchParams.get('limit') || '20')
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ runs: darwin.listRuns(limit) }))
+          return
+        }
+        const run = darwin.getRun(runId)
+        if (!run) {
+          res.writeHead(404, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Run not found' }))
+          return
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ run }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/darwin-approve': async (req: any, res: any) => {
+      if (req.method !== 'POST') { res.writeHead(405).end(); return }
+      try {
+        const body = await readBody(req)
+        const { runId, dimension } = body
+        if (!runId || !dimension) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'runId and dimension are required' }))
+          return
+        }
+        const ok = await darwin.approveRound(runId, dimension)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/darwin-reject': async (req: any, res: any) => {
+      if (req.method !== 'POST') { res.writeHead(405).end(); return }
+      try {
+        const body = await readBody(req)
+        const { runId, dimension, reason } = body
+        if (!runId || !dimension) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'runId and dimension are required' }))
+          return
+        }
+        const ok = await darwin.rejectRound(runId, dimension, reason)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/darwin-stop': async (req: any, res: any) => {
+      if (req.method !== 'POST') { res.writeHead(405).end(); return }
+      try {
+        const body = await readBody(req)
+        const { runId, reason } = body
+        if (!runId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'runId is required' }))
+          return
+        }
+        const ok = darwin.stopRun(runId, reason)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/darwin-runs': async (req: any, res: any) => {
+      if (req.method !== 'GET') { res.writeHead(405).end(); return }
+      try {
+        const url = new URL(req.url!, `http://${req.headers.host}`)
+        const limit = parseInt(url.searchParams.get('limit') || '20')
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ runs: darwin.listRuns(limit) }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    // ============================================================
+    // CoEvo 共进化验证模式
+    // ============================================================
+    '/api/skill-forge/coevo-start': async (req: any, res: any) => {
+      if (req.method !== 'POST') { res.writeHead(405).end(); return }
+      try {
+        const body = await readBody(req)
+        const { skillName, autoApprove, maxRounds, targetSkillScore, targetTestStrength } = body
+        if (!skillName) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'skillName is required' }))
+          return
+        }
+        const result = await coevo.startCoEvolution(skillName, {
+          autoApprove: typeof autoApprove === 'boolean' ? autoApprove : undefined,
+          maxRounds: typeof maxRounds === 'number' ? maxRounds : undefined,
+          targetSkillScore: typeof targetSkillScore === 'number' ? targetSkillScore : undefined,
+          targetTestStrength: typeof targetTestStrength === 'number' ? targetTestStrength : undefined,
+        })
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(result))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/coevo-status': async (req: any, res: any) => {
+      if (req.method !== 'GET') { res.writeHead(405).end(); return }
+      try {
+        const url = new URL(req.url!, `http://${req.headers.host}`)
+        const runId = url.searchParams.get('runId')
+        if (!runId) {
+          const limit = parseInt(url.searchParams.get('limit') || '20')
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ runs: coevo.listRuns(limit) }))
+          return
+        }
+        const run = coevo.getRun(runId)
+        if (!run) {
+          res.writeHead(404, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Run not found' }))
+          return
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ run }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/coevo-approve': async (req: any, res: any) => {
+      if (req.method !== 'POST') { res.writeHead(405).end(); return }
+      try {
+        const body = await readBody(req)
+        const { runId } = body
+        if (!runId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'runId is required' }))
+          return
+        }
+        const ok = await coevo.approveRound(runId)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/coevo-reject': async (req: any, res: any) => {
+      if (req.method !== 'POST') { res.writeHead(405).end(); return }
+      try {
+        const body = await readBody(req)
+        const { runId, reason } = body
+        if (!runId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'runId is required' }))
+          return
+        }
+        const ok = await coevo.rejectRound(runId, reason)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/coevo-stop': async (req: any, res: any) => {
+      if (req.method !== 'POST') { res.writeHead(405).end(); return }
+      try {
+        const body = await readBody(req)
+        const { runId, reason } = body
+        if (!runId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'runId is required' }))
+          return
+        }
+        const ok = coevo.stopRun(runId, reason)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/coevo-runs': async (req: any, res: any) => {
+      if (req.method !== 'GET') { res.writeHead(405).end(); return }
+      try {
+        const url = new URL(req.url!, `http://${req.headers.host}`)
+        const limit = parseInt(url.searchParams.get('limit') || '20')
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ runs: coevo.listRuns(limit) }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    // 技能编排
+    '/api/skill-forge/orchestrate': async (req: any, res: any) => {
+      if (req.method !== 'POST') { res.writeHead(405).end(); return }
+      try {
+        const body = await readBody(req)
+        const task = body.task || body.query || ''
+        if (!task) {
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'task is required' }))
+          return
+        }
+        const mode = (body.mode || 'auto') as 'fast' | 'llm' | 'auto'
+        const result = await skillOrchestrator.orchestrate(task, { mode })
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({
+          workflow: result.workflow,
+          skillIdsToInject: result.skillIdsToInject,
+          executionGuide: result.executionGuide,
+          estimatedTokens: result.estimatedTokens,
+        }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/orchestrator/stats': (_req: any, res: any) => {
+      try {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(skillOrchestrator.getStats()))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    // ============================================================
+    // Dreaming 闲时锻造模式
+    // ============================================================
+    '/api/skill-forge/dreaming/start': async (req: any, res: any) => {
+      if (req.method !== 'POST') { res.writeHead(405).end(); return }
+      try {
+        const body = await readBody(req)
+        const triggerType = (body.triggerType as 'manual' | 'scheduled' | 'idle') || 'manual'
+        const run = await dreaming.startDreaming(triggerType)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ run }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/dreaming/stop': async (req: any, res: any) => {
+      if (req.method !== 'POST') { res.writeHead(405).end(); return }
+      try {
+        const body = await readBody(req)
+        const ok = dreaming.stopDreaming(body?.reason)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/dreaming/status': (_req: any, res: any) => {
+      try {
+        const current = dreaming.getCurrentRun()
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ current }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/dreaming/history': (_req: any, res: any) => {
+      try {
+        const url = new URL(_req.url!, `http://${_req.headers.host}`)
+        const limit = parseInt(url.searchParams.get('limit') || '20')
+        const history = dreaming.getHistory(limit)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ history }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
+    '/api/skill-forge/dreaming/health-report': async (_req: any, res: any) => {
+      if (_req.method !== 'GET') { res.writeHead(405).end(); return }
+      try {
+        const report = await dreaming.generateHealthReport()
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ report }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: (e as Error).message }))
+      }
+    },
   }
 
   for (const { path: routePath, kind } of FORGE_ROUTES) {
@@ -775,6 +1372,9 @@ export function apply(ctx: Context, config: Config) {
     try {
       await registry.initialize()
       await orchestrator.initialize(registry.getStoragePath())
+      await darwin.initialize(registry.getStoragePath())
+      await coevo.initialize(registry.getStoragePath())
+      await dreaming.initialize(registry.getStoragePath())
       await trigger.start()
       await injection.start()
       ctx.logger.info('[skill-forge] Plugin initialized')
@@ -791,6 +1391,7 @@ export function apply(ctx: Context, config: Config) {
   ctx.on('dispose', async () => {
     await trigger.stop()
     await injection.stop()
+    await dreaming.dispose()
     ctx.logger.info('[skill-forge] Plugin disposed')
   })
 }
