@@ -72,9 +72,13 @@ Deeply embedded in the DSH Web UI. A right sidebar hosts the forge queue, skill 
 
 Skill Forge is installed as a DSH plugin via your profile's `package.json`.
 
-#### Install from GitHub (recommended)
+#### The AI-native install (easiest)
 
-Add the plugin to your DSH profile:
+Just say this to DSH and it will install everything automatically:
+
+> Install the "dsh-skill-forge" plugin from GitHub:Epiphany-Leon/dsh-skill-forge into my web profile. Add it to `dsh.profile.bundles` in package.json and restart.
+
+#### Install from GitHub (recommended)
 
 ```bash
 # In your DSH profile directory (e.g. ~/.dsh/profiles/web)

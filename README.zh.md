@@ -72,6 +72,12 @@
 
 Skill Forge 通过 DSH profile 的 `package.json` 安装为插件。
 
+#### 一句话安装（最简单）
+
+直接对 DSH 说这句话，它会自动完成安装：
+
+> 帮我安装 "dsh-skill-forge" 插件，从 GitHub:Epiphany-Leon/dsh-skill-forge 安装到 web profile，加到 package.json 的 dsh.profile.bundles 里，然后重启。
+
 #### 从 GitHub 安装（推荐）
 
 在你的 DSH profile 目录下安装插件：
