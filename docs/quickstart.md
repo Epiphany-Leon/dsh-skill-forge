@@ -24,19 +24,27 @@ dsh --version
 
 ## 第 2 步：安装插件
 
-打开终端，执行以下命令将 dsh-skill-forge 安装到你的 DSH web profile：
+在你的 DSH profile 目录（如 `~/.dsh/profiles/web`）下执行：
 
 ```bash
-dsh plugin --profile web add dsh-skill-forge
+pnpm add dsh-skill-forge@github:Epiphany-Leon/dsh-skill-forge
 ```
 
-安装完成后可以用以下命令确认：
+然后编辑 profile 的 `package.json`，在 `dsh.profile.bundles` 中添加 `"dsh-skill-forge"`：
 
-```bash
-dsh plugin --profile web list
+```json
+{
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "dsh-skill-forge"
+      ]
+    }
+  }
+}
 ```
-
-输出中应该能看到 `dsh-skill-forge` 条目。
 
 ### 本地开发安装（可选）
 
@@ -47,7 +55,11 @@ git clone https://github.com/Epiphany-Leon/dsh-skill-forge.git
 cd dsh-skill-forge
 pnpm install
 pnpm build
-dsh plugin --profile web add .
+
+# 链接到本地 DSH profile
+cd ~/.dsh/profiles/web
+pnpm add dsh-skill-forge@link:/path/to/dsh-skill-forge
+# 然后在 package.json 的 dsh.profile.bundles 中添加 "dsh-skill-forge"
 ```
 
 ---

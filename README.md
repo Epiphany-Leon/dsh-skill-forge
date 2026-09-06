@@ -70,16 +70,47 @@ Deeply embedded in the DSH Web UI. A right sidebar hosts the forge queue, skill 
 
 ### Installation
 
-```bash
-# Recommended: install via dsh plugin manager
-dsh plugin --profile web add dsh-skill-forge
+Skill Forge is installed as a DSH plugin via your profile's `package.json`.
 
-# For local development
+#### Install from GitHub (recommended)
+
+Add the plugin to your DSH profile:
+
+```bash
+# In your DSH profile directory (e.g. ~/.dsh/profiles/web)
+pnpm add dsh-skill-forge@github:Epiphany-Leon/dsh-skill-forge
+```
+
+Then edit your profile's `package.json` to enable the bundle:
+
+```json
+{
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "dsh-skill-forge"
+      ]
+    }
+  }
+}
+```
+
+Restart DSH — the Skill Forge panel appears in the right sidebar.
+
+#### Local development
+
+```bash
 git clone https://github.com/Epiphany-Leon/dsh-skill-forge.git
 cd dsh-skill-forge
 pnpm install
 pnpm build
-dsh plugin --profile web add ./dsh-skill-forge
+
+# Link to your DSH profile
+cd ~/.dsh/profiles/web
+pnpm add dsh-skill-forge@link:/path/to/dsh-skill-forge
+# Then add "dsh-skill-forge" to dsh.profile.bundles in package.json
 ```
 
 ### Run
