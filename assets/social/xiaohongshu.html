@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dsh-skill-forge — 小红书风格宣传图</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1080px;
+    height: 1440px;
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    background: linear-gradient(160deg, #fef3c7 0%, #fde68a 30%, #fbbf24 100%);
+    color: #1e293b;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* 装饰性圆点 */
+  .dots {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(251, 191, 36, 0.3) 1px, transparent 1px);
+    background-size: 30px 30px;
+    opacity: 0.5;
+  }
+
+  .content {
+    position: relative;
+    z-index: 1;
+    padding: 70px 60px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .top-tag {
+    text-align: center;
+    margin-bottom: 30px;
+  }
+  .top-tag span {
+    display: inline-block;
+    padding: 8px 24px;
+    background: rgba(30, 41, 59, 0.9);
+    color: #fbbf24;
+    border-radius: 100px;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 2px;
+  }
+
+  .title-section {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+  .title-section h1 {
+    font-size: 56px;
+    font-weight: 900;
+    color: #1e293b;
+    line-height: 1.2;
+    margin-bottom: 12px;
+    letter-spacing: -0.02em;
+  }
+  .title-section h1 .highlight {
+    color: #d97706;
+    position: relative;
+  }
+  .title-section .subtitle {
+    font-size: 22px;
+    color: #78350f;
+    font-weight: 500;
+  }
+
+  /* 孵化蛋 */
+  .egg-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 40px;
+  }
+  .egg-wrap {
+    position: relative;
+    width: 200px;
+    height: 260px;
+  }
+  .egg {
+    width: 180px;
+    height: 240px;
+    background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 50%, #fde68a 100%);
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    box-shadow:
+      inset -15px -20px 40px rgba(251, 191, 36, 0.2),
+      inset 15px 15px 30px rgba(255, 255, 255, 0.5),
+      0 15px 40px rgba(217, 119, 6, 0.2);
+    border: 3px solid #fbbf24;
+  }
+  .egg-eye {
+    position: absolute;
+    top: 80px;
+    width: 22px;
+    height: 22px;
+    background: #1e293b;
+    border-radius: 50%;
+  }
+  .egg-eye.left { left: 50px; }
+  .egg-eye.right { right: 50px; }
+  .egg-eye::after {
+    content: '';
+    position: absolute;
+    top: 5px;
+    left: 7px;
+    width: 8px;
+    height: 8px;
+    background: white;
+    border-radius: 50%;
+  }
+  .egg-cheek {
+    position: absolute;
+    top: 110px;
+    width: 18px;
+    height: 10px;
+    background: #fca5a5;
+    border-radius: 50%;
+    opacity: 0.6;
+  }
+  .egg-cheek.left { left: 38px; }
+  .egg-cheek.right { right: 38px; }
+
+  .egg-crack {
+    position: absolute;
+    bottom: 65px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 50px;
+  }
+  .crack-main {
+    position: absolute;
+    width: 100px;
+    height: 5px;
+    background: linear-gradient(90deg, #10b981, #34d399, #10b981);
+    border-radius: 3px;
+    top: 22px;
+    left: 10px;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.5);
+  }
+  .crack-zig-1 {
+    position: absolute;
+    width: 25px;
+    height: 4px;
+    background: #10b981;
+    border-radius: 2px;
+    top: 10px;
+    left: 20px;
+    transform: rotate(-35deg);
+  }
+  .crack-zig-2 {
+    position: absolute;
+    width: 30px;
+    height: 4px;
+    background: #10b981;
+    border-radius: 2px;
+    top: 8px;
+    right: 15px;
+    transform: rotate(30deg);
+  }
+  .crack-zig-3 {
+    position: absolute;
+    width: 20px;
+    height: 4px;
+    background: #10b981;
+    border-radius: 2px;
+    bottom: 10px;
+    left: 30px;
+    transform: rotate(25deg);
+  }
+  .crack-zig-4 {
+    position: absolute;
+    width: 28px;
+    height: 4px;
+    background: #10b981;
+    border-radius: 2px;
+    bottom: 8px;
+    right: 10px;
+    transform: rotate(-28deg);
+  }
+
+  /* 卖点列表 */
+  .selling-points {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 30px;
+  }
+  .point {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    padding: 20px 24px;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    box-shadow: 0 4px 20px rgba(217, 119, 6, 0.1);
+  }
+  .point-num {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 800;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .point-text {
+    flex: 1;
+  }
+  .point-text h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 4px;
+  }
+  .point-text p {
+    font-size: 14px;
+    color: #64748b;
+    line-height: 1.5;
+  }
+
+  /* 底部 */
+  .bottom {
+    text-align: center;
+    padding-top: 24px;
+    border-top: 2px dashed rgba(217, 119, 6, 0.3);
+  }
+  .bottom .app-name {
+    font-size: 24px;
+    font-weight: 800;
+    color: #92400e;
+    margin-bottom: 6px;
+  }
+  .bottom .app-desc {
+    font-size: 14px;
+    color: #a16207;
+    margin-bottom: 12px;
+  }
+  .bottom .tags {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .bottom .tag {
+    padding: 5px 12px;
+    background: rgba(217, 119, 6, 0.15);
+    color: #92400e;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+</style>
+</head>
+<body>
+  <div class="dots"></div>
+  <div class="content">
+    <div class="top-tag">
+      <span>✨ AI 效率神器 ✨</span>
+    </div>
+
+    <div class="title-section">
+      <h1>让 AI 从你的对话里<br><span class="highlight">「长出」技能</span></h1>
+      <p class="subtitle">每次解决问题的经验，都不会浪费</p>
+    </div>
+
+    <div class="egg-container">
+      <div class="egg-wrap">
+        <div class="egg">
+          <div class="egg-eye left"></div>
+          <div class="egg-eye right"></div>
+          <div class="egg-cheek left"></div>
+          <div class="egg-cheek right"></div>
+          <div class="egg-crack">
+            <div class="crack-main"></div>
+            <div class="crack-zig-1"></div>
+            <div class="crack-zig-2"></div>
+            <div class="crack-zig-3"></div>
+            <div class="crack-zig-4"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="selling-points">
+      <div class="point">
+        <div class="point-num">1</div>
+        <div class="point-text">
+          <h3>自动提炼方法论</h3>
+          <p>不用你手动整理，它会从对话历史里自动提取核心思路和操作步骤</p>
+        </div>
+      </div>
+      <div class="point">
+        <div class="point-num">2</div>
+        <div class="point-text">
+          <h3>7 道质量关卡</h3>
+          <p>提取→生成→验证→迭代→审计，每一步都有工程化质量门控</p>
+        </div>
+      </div>
+      <div class="point">
+        <div class="point-num">3</div>
+        <div class="point-text">
+          <h3>下次自动用起来</h3>
+          <p>锻造好的技能会自动注入下一次对话，遇到类似问题直接调用</p>
+        </div>
+      </div>
+      <div class="point">
+        <div class="point-num">4</div>
+        <div class="point-text">
+          <h3>越用越懂你</h3>
+          <p>用得好的技能排前面，用得不好的自动降权，奖励驱动持续进化</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bottom">
+      <div class="app-name">🥚 dsh-skill-forge</div>
+      <div class="app-desc">DeepSeek Harness 技能锻造插件 · 开源免费</div>
+      <div class="tags">
+        <span class="tag">#AI工具</span>
+        <span class="tag">#效率神器</span>
+        <span class="tag">#Agent</span>
+        <span class="tag">#技能锻造</span>
+        <span class="tag">#开源</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

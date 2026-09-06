@@ -1,0 +1,81 @@
+{
+  "name": "dsh-skill-forge",
+  "version": "0.1.0",
+  "description": "Multi-Agent collaborative skill forging system for DeepSeek Harness — distill conversational experience into verifiable, reusable skills.",
+  "license": "MIT",
+  "author": "Epiphany-Leon",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Epiphany-Leon/dsh-skill-forge.git"
+  },
+  "homepage": "https://github.com/Epiphany-Leon/dsh-skill-forge#readme",
+  "bugs": {
+    "url": "https://github.com/Epiphany-Leon/dsh-skill-forge/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "skills",
+    "self-improvement",
+    "multi-agent",
+    "skill-forge"
+  ],
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/index.d.ts",
+    "lib/client.js",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "slots"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf lib",
+    "prepare": "tsdown"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-settings": "^0.1.0-rc.5",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-settings": "^0.1.0-rc.5",
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
+    "@types/node": "^22.20.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^19.2.7",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3"
+  }
+}

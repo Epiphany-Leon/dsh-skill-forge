@@ -1,0 +1,31 @@
+# Source
+src/
+tsconfig.json
+tsdown.config.ts
+
+# Dev / docs
+*.md
+!README*.md
+STATUS.md
+PLAN.md
+cordis.patch.yml
+
+# Tests & config
+*.test.*
+*.spec.*
+.vscode/
+.idea/
+.git/
+.gitignore
+.npmignore
+
+# Build artifacts (explicitly listed in package.json "files")
+node_modules/
+pnpm-lock.yaml
+pnpm-workspace.yaml
+
+# Client source
+client/
+
+# Patches
+*.patch
