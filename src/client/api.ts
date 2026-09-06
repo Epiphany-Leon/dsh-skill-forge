@@ -1,10 +1,13 @@
 /**
  * API Client —— 从浏览器端调用 Host 端的 HTTP API
+ *
+ * 所有返回值使用 Promise<unknown> 而非 any，
+ * 调用方根据具体业务结构访问（配合可选链）。
  */
 
-const API_BASE = '/api/skill-forge'
+import { API_BASE, QUEUE_POLL_LIMIT } from './constants.js'
 
-async function request(path: string, options?: RequestInit): Promise<any> {
+async function request(path: string, options?: RequestInit): Promise<unknown> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
@@ -13,12 +16,22 @@ async function request(path: string, options?: RequestInit): Promise<any> {
   return res.json()
 }
 
+// 查询参数类型
+export interface SkillQueryParams {
+  search?: string
+  status?: string
+  category?: string
+  sort?: string
+  limit?: number
+  offset?: number
+}
+
 export const api = {
   // 队列
-  getQueue: (limit = 20) => request(`/queue?limit=${limit}`),
+  getQueue: (limit = QUEUE_POLL_LIMIT) => request(`/queue?limit=${limit}`),
 
   // 技能列表（支持搜索筛选）
-  getSkills: (params?: { search?: string; status?: string; category?: string; sort?: string; limit?: number; offset?: number }) => {
+  getSkills: (params?: SkillQueryParams) => {
     const qs = new URLSearchParams()
     if (params?.search) qs.set('search', params.search)
     if (params?.status) qs.set('status', params.status)
@@ -61,7 +74,7 @@ export const api = {
     request(`/skill-delete?name=${encodeURIComponent(name)}`, { method: 'DELETE' }),
   reforgeSkill: (name: string, reason?: string) =>
     request('/skill-reforge', { method: 'POST', body: JSON.stringify({ name, reason }) }),
-  updateSkill: (name: string, data: { frontmatter?: any; body?: string; changelog?: string }) =>
+  updateSkill: (name: string, data: { frontmatter?: Record<string, unknown>; body?: string; changelog?: string }) =>
     request('/skill-update', { method: 'PUT', body: JSON.stringify({ name, ...data }) }),
   recordUsage: (name: string) =>
     request('/skill-usage', { method: 'POST', body: JSON.stringify({ name }) }),
@@ -83,7 +96,8 @@ export const api = {
 
   // 配置
   getConfig: () => request('/config'),
-  updateConfig: (config: any) => request('/config', { method: 'PUT', body: JSON.stringify(config) }),
+  updateConfig: (config: Record<string, unknown>) =>
+    request('/config', { method: 'PUT', body: JSON.stringify(config) }),
 
   // 文件
   getFileTree: (path: string, showHidden: boolean) =>
@@ -103,7 +117,7 @@ export const api = {
     request('/darwin-reject', { method: 'POST', body: JSON.stringify({ runId, dimension, reason }) }),
   darwinStop: (runId: string) =>
     request('/darwin-stop', { method: 'POST', body: JSON.stringify({ runId }) }),
-  darwinRuns: (limit = 20) =>
+  darwinRuns: (limit = QUEUE_POLL_LIMIT) =>
     request(`/darwin-runs?limit=${limit}`),
 
   // ===== 饕餮模式 =====
@@ -133,7 +147,7 @@ export const api = {
     request('/coevo-reject', { method: 'POST', body: JSON.stringify({ runId, reason }) }),
   coevoStop: (runId: string, reason?: string) =>
     request('/coevo-stop', { method: 'POST', body: JSON.stringify({ runId, reason }) }),
-  coevoRuns: (limit = 20) =>
+  coevoRuns: (limit = QUEUE_POLL_LIMIT) =>
     request(`/coevo-runs?limit=${limit}`),
 
   // ===== 技能编排 =====
@@ -149,7 +163,7 @@ export const api = {
     request('/dreaming/stop', { method: 'POST', body: JSON.stringify({ reason }) }),
   dreamingStatus: () =>
     request('/dreaming/status'),
-  dreamingHistory: (limit = 20) =>
+  dreamingHistory: (limit = QUEUE_POLL_LIMIT) =>
     request(`/dreaming/history?limit=${limit}`),
   dreamingHealthReport: () =>
     request('/dreaming/health-report'),

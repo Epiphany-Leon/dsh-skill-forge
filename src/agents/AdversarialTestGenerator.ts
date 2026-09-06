@@ -43,7 +43,7 @@ interface RawAdversarialCase {
 }
 
 export class AdversarialTestGenerator extends BaseAgent {
-  constructor(ctx: any, config: SkillForgeConfig) {
+  constructor(ctx: unknown, config: SkillForgeConfig) {
     super(ctx, config)
   }
 
@@ -328,8 +328,8 @@ ${weakDimensions.length > 0 ? dimLabels : '暂无明显薄弱维度'}
 
     const now = Date.now()
     return raw
-      .filter((tc: any) => tc.name && tc.input)
-      .map((tc: any, i: number) => {
+      .filter((tc: RawAdversarialCase) => typeof tc.name === 'string' && typeof tc.input === 'string')
+      .map((tc, i) => {
         const type = validTypes[tc.type] || AdversarialTestType.EDGE_CASE
         const dimension = validDims[tc.dimension] || QualityDimension.PRACTICALITY
         const difficulty = ['easy', 'medium', 'hard', 'extreme'].includes(tc.expectedDifficulty)

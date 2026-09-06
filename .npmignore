@@ -1,16 +1,19 @@
-# Source
+# Source code
 src/
 tsconfig.json
 tsdown.config.ts
+pnpm-workspace.yaml
 
-# Dev / docs
-*.md
-!README*.md
+# Documentation (keep READMEs)
+docs/
 STATUS.md
 PLAN.md
-cordis.patch.yml
+CONTRIBUTING.md
+CHANGELOG.md
+*.md
+!README*.md
 
-# Tests & config
+# Tests & tooling
 *.test.*
 *.spec.*
 .vscode/
@@ -18,14 +21,27 @@ cordis.patch.yml
 .git/
 .gitignore
 .npmignore
+.editorconfig
 
 # Build artifacts (explicitly listed in package.json "files")
 node_modules/
 pnpm-lock.yaml
-pnpm-workspace.yaml
+package-lock.json
+yarn.lock
 
-# Client source
+# Client source (built into lib/client.js)
 client/
 
 # Patches
 *.patch
+
+# Assets
+assets/
+
+# Temp & cache
+tmp/
+temp/
+*.tmp
+*.log
+coverage/
+.DS_Store

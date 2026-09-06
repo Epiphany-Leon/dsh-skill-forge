@@ -1,7 +1,7 @@
 {
   "name": "dsh-skill-forge",
-  "version": "0.1.0",
-  "description": "Multi-Agent collaborative skill forging system for DeepSeek Harness — distill conversational experience into verifiable, reusable skills.",
+  "version": "0.3.0",
+  "description": "Multi-Agent collaborative skill forging system for DeepSeek Harness — distill conversational experience into verifiable, reusable skills with evolutionary optimization.",
   "license": "MIT",
   "author": "Epiphany-Leon",
   "repository": {
@@ -22,7 +22,10 @@
     "skills",
     "self-improvement",
     "multi-agent",
-    "skill-forge"
+    "skill-forge",
+    "skill-evolution",
+    "adversarial-testing",
+    "smart-injection"
   ],
   "type": "module",
   "main": "lib/index.js",
@@ -40,6 +43,7 @@
     "lib/index.js",
     "lib/index.d.ts",
     "lib/client.js",
+    "lib/client.js.map",
     "cordis.patch.yml"
   ],
   "dsh": {
@@ -57,7 +61,8 @@
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf lib",
-    "prepare": "tsdown"
+    "prepare": "tsdown",
+    "dev": "tsdown --watch"
   },
   "dependencies": {
     "@deepseek-ai/dsh-settings": "^0.1.0-rc.5",

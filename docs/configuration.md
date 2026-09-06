@@ -112,6 +112,52 @@
   - 快速积累阶段可以降到 `0.75`，后期再逐步提高
   - 生产环境建议保持 `0.9` 及以上
 
+#### `enableIncrementalAccumulation`
+
+是否启用增量式经验累积触发。开启后，系统会按会话累积对话密度信号，达到阈值后触发锻造评估。
+
+- **类型**：`boolean`
+- **默认值**：`true`
+
+#### `densityThreshold`
+
+触发锻造的对话密度阈值。单位时间内的工具调用次数和问题复杂度超过此值时，认为这段对话有锻造价值。
+
+- **类型**：`number`
+- **范围**：`0.1` – `10.0`
+- **默认值**：`2.0`
+
+#### `minForgingIntervalMinutes`
+
+两次自动锻造之间的最小间隔时间，防止短时间内频繁触发。
+
+- **类型**：`number`
+- **范围**：`5` – `240`
+- **默认值**：`30`
+
+#### `idleDensityThreshold`
+
+Idle 检测的密度阈值。对话密度低于此值且持续一段时间后，认为对话已结束，触发锻造评估。
+
+- **类型**：`number`
+- **范围**：`0.1` – `1.0`
+- **默认值**：`0.5`
+
+#### `enableIntentAware`
+
+是否启用意图感知触发。开启后，系统会分析用户消息的意图复杂度，辅助判断锻造价值。
+
+- **类型**：`boolean`
+- **默认值**：`true`
+
+#### `intentAnalysisMinChars`
+
+触发意图分析的消息最小字符数。短消息直接跳过意图分析以节省 token。
+
+- **类型**：`number`
+- **范围**：`0` – `500`
+- **默认值**：`20`
+
 ---
 
 ### 技能库治理
@@ -123,7 +169,7 @@
 - **类型**：`number`
 - **范围**：`10` – `100`
 - **默认值**：`30`
-- **建议**：配合 `injectionMode: 'smart'` 使用时可以放宽到 `50`–`100`，智能注入会自动筛选
+- **建议**：配合 `injectionMode: 'smart'` 使用时可以放宽到 `50`–`100`
 
 #### `workspaceRoot`
 
@@ -153,100 +199,358 @@
 - **默认值**：`all`
 - **建议**：
   - 技能数少于 10 个时用 `all` 即可，简单可靠
-  - 技能数超过 15 个后建议切换到 `smart`，减少 token 消耗和技能污染
-  - 切换到 `smart` 后观察几天效果，再调整相关阈值
+  - 技能数超过 15 个后建议切换到 `smart`
 
 #### `tokenBudgetRatio`
 
-技能注入的 token 预算占总上下文的比例。智能注入模式下，用于注入技能的 token 不超过总预算的这个比例。
+技能注入的 token 预算占总上下文的比例。智能注入模式下生效。
 
 - **类型**：`number`
 - **范围**：`0.05` – `0.3`
 - **默认值**：`0.1`
-- **调优**：
-  - 设高一点可以注入更多技能，但留给对话的 token 会减少
-  - 设低一点节省 token，但可能漏掉一些相关度不那么高的有用技能
-  - 长任务场景建议 `0.05`–`0.1`，短问答场景可以到 `0.15`–`0.2`
 
 #### `injectionTokenBudget`
 
-智能注入时每轮对话的 token 预算上限（字符数估算）。
+智能注入时每轮对话的 token 预算上限（字符数估算）。设为 `0` 时根据 `tokenBudgetRatio` 自动计算。
 
 - **类型**：`number`
 - **默认值**：`0`
-- **说明**：
-  - 值为 `0` 时，系统根据 `tokenBudgetRatio` 和模型上下文窗口自动计算
-  - 设为具体数值时，覆盖自动计算结果，直接以此值为上限
-  - 单位为字符数（粗略估算 token 数，约 1 token = 4 字符）
 
 #### `injectionRelevanceThreshold`
 
-智能注入的最低相关度阈值。综合评分低于此值的技能不会被注入，即使 token 预算还有剩余。
+智能注入的最低相关度阈值。综合评分低于此值的技能不会被注入。
 
 - **类型**：`number`
 - **范围**：`0` – `1`
 - **默认值**：`0.2`
-- **调优**：
-  - 设高一点，注入的技能更少但更精准
-  - 设低一点，注入的技能更多但可能引入噪音
-  - 建议从默认值开始，观察注入效果后微调
 
 ---
 
-### 闲时锻造
+### 奖励学习与反馈
 
-#### `enableDreaming`
+#### `enableRewardLearning`
 
-是否启用闲时锻造（Dreaming 模式）。开启后，系统会在配置的时间段自动扫描历史对话，批量锻造技能。
+是否启用奖励驱动的技能权重自调整。开启后，用户反馈会动态调整技能的召回权重。
+
+- **类型**：`boolean`
+- **默认值**：`true`
+
+#### `implicitFeedbackWindow`
+
+隐式反馈的观察窗口（回合数）。在这个窗口内，如果用户继续深入对话，视为正反馈；如果转向其他话题，视为负反馈。
+
+- **类型**：`number`
+- **范围**：`1` – `10`
+- **默认值**：`3`
+
+#### `implicitPositiveStep`
+
+每次隐式正反馈的权重增加量。
+
+- **类型**：`number`
+- **范围**：`0.01` – `0.5`
+- **默认值**：`0.1`
+
+#### `implicitNegativeStep`
+
+每次隐式负反馈的权重减少量。
+
+- **类型**：`number`
+- **范围**：`0.01` – `0.5`
+- **默认值**：`0.15`
+
+#### `explicitFeedbackMultiplier`
+
+显式反馈的乘数。显式反馈（用户手动点赞/点踩）的权重变化是隐式反馈的这个倍数。
+
+- **类型**：`number`
+- **范围**：`1` – `10`
+- **默认值**：`3`
+
+#### `dailyDecayRate`
+
+日衰减率。每天对所有技能的使用频率做一次衰减，防止老技能长期占据高权重。
+
+- **类型**：`number`
+- **范围**：`0` – `0.5`
+- **默认值**：`0.05`
+
+#### `feedbackScoreWeight`
+
+反馈得分在智能注入五维评分中的权重。
+
+- **类型**：`number`
+- **范围**：`0` – `0.5`
+- **默认值**：`0.15`
+
+#### `usageScoreWeight`
+
+使用频率在智能注入五维评分中的权重。
+
+- **类型**：`number`
+- **范围**：`0` – `0.5`
+- **默认值**：`0.1`
+
+> 注：智能注入五维评分权重总和为 1.0，其余维度权重固定：关键词匹配 40%、验证得分 30%、新鲜度 10%。
+
+---
+
+### 达尔文模式（单体技能进化）
+
+#### `darwinMaxIterations`
+
+达尔文模式的最大迭代轮数。每轮对技能做一次变异和验证，连续无进步则停止。
+
+- **类型**：`number`
+- **默认值**：`10`
+
+#### `darwinHighScoreThreshold`
+
+达尔文模式的高分阈值。达到此分数以上的维度不再优化，聚焦低分维度。
+
+- **类型**：`number`
+- **范围**：`0` – `1`
+- **默认值**：`0.9`
+
+#### `darwinAutoApprove`
+
+达尔文模式进化后的技能是否自动批准。关闭时需要人工确认。
 
 - **类型**：`boolean`
 - **默认值**：`false`
-- **建议**：
-  - 有大量历史对话想批量提炼时开启
-  - 个人日常使用通常不需要
-  - 开启后注意控制频率，避免消耗过多 API token
+
+---
+
+### 饕餮模式（技能融合）
+
+#### `taotieEnabled`
+
+是否启用饕餮模式（技能融合）。
+
+- **类型**：`boolean`
+- **默认值**：`true`
+
+#### `taotieAutoDetect`
+
+是否自动检测可融合的技能对。开启后，系统会定期扫描技能库，发现高相似度的技能对并建议融合。
+
+- **类型**：`boolean`
+- **默认值**：`true`
+
+#### `taotieSimilarityThreshold`
+
+技能融合的相似度阈值。两个技能相似度超过此值时被认为有融合潜力。
+
+- **类型**：`number`
+- **范围**：`0` – `1`
+- **默认值**：`0.4`
+
+#### `taotieMaxInjectionSteps`
+
+饕餮模式的最大融合步骤数。
+
+- **类型**：`number`
+- **默认值**：`5`
+
+#### `taotieMinImprovementThreshold`
+
+融合后质量提升的最小阈值。低于此值则认为融合没有价值，回退到原技能。
+
+- **类型**：`number`
+- **范围**：`0` – `1`
+- **默认值**：`0.05`
+
+#### `taotieAutoApprove`
+
+饕餮模式融合后的技能是否自动批准。
+
+- **类型**：`boolean`
+- **默认值**：`false`
+
+---
+
+### 共进化模式（CoEvo）
+
+#### `coevoEnabled`
+
+是否启用共进化模式。开启后，技能和对抗性测试套件双向进化。
+
+- **类型**：`boolean`
+- **默认值**：`true`
+
+#### `coevoMaxRounds`
+
+共进化的最大轮数。奇数轮进化技能，偶数轮进化测试套件。
+
+- **类型**：`number`
+- **默认值**：`10`
+
+#### `coevoTargetSkillScore`
+
+共进化的目标技能得分。达到此分数后技能侧停止进化。
+
+- **类型**：`number`
+- **范围**：`0` – `1`
+- **默认值**：`0.9`
+
+#### `coevoTargetTestStrength`
+
+共进化的目标测试强度。达到此值后测试侧停止进化。
+
+- **类型**：`number`
+- **范围**：`0` – `1`
+- **默认值**：`0.85`
+
+#### `coevoInitialTestCount`
+
+初始生成的对抗性测试用例数量。
+
+- **类型**：`number`
+- **默认值**：`5`
+
+#### `coevoMaxTestCases`
+
+测试套件的最大用例数量。超过此数量后，淘汰最弱的用例。
+
+- **类型**：`number`
+- **默认值**：`20`
+
+#### `coevoTestsPerRound`
+
+每轮进化新增的测试用例数量。
+
+- **类型**：`number`
+- **默认值**：`3`
+
+#### `coevoAutoApprove`
+
+共进化完成后的技能是否自动批准。
+
+- **类型**：`boolean`
+- **默认值**：`false`
+
+#### `coevoTestPruneThreshold`
+
+测试用例淘汰阈值。强度低于此值的测试用例会被淘汰。
+
+- **类型**：`number`
+- **范围**：`0` – `1`
+- **默认值**：`0.3`
+
+---
+
+### Dreaming 闲时锻造
+
+#### `enableDreaming`
+
+是否启用闲时锻造。
+
+- **类型**：`boolean`
+- **默认值**：`false`
 
 #### `dreamingSchedule`
 
-闲时锻造的调度时间，使用 cron 表达式。
+闲时锻造的 cron 调度表达式。
 
 - **类型**：`string`
 - **默认值**：`0 3 * * 0`（每周日凌晨 3 点）
 - **格式**：标准 5 位 cron 表达式 `分 时 日 月 周`
-- **常用示例**：
-  - `0 2 * * *` — 每天凌晨 2 点
-  - `0 3 * * 0` — 每周日凌晨 3 点
-  - `0 */6 * * *` — 每 6 小时
-  - `30 1 * * 6` — 每周六凌晨 1:30
-- **建议**：选在你通常不使用 DSH 的时间段，避免影响正常对话
+
+#### `dreamingIdleThresholdMinutes`
+
+空闲触发的阈值（分钟）。DSH 空闲超过此时间后自动触发闲时锻造（如果配置了空闲触发）。
+
+- **类型**：`number`
+- **默认值**：`30`
+
+#### `dreamingMaxConcurrentOptimizations`
+
+闲时锻造的最大并发优化任务数。
+
+- **类型**：`number`
+- **默认值**：`2`
+
+#### `dreamingAutoOptimizeThreshold`
+
+自动优化的质量分阈值。质量分低于此值的技能会被自动优化。
+
+- **类型**：`number`
+- **范围**：`0` – `1`
+- **默认值**：`0.7`
+
+#### `dreamingAutoFusion`
+
+闲时锻造时是否自动执行技能融合。
+
+- **类型**：`boolean`
+- **默认值**：`true`
+
+#### `dreamingAutoArchiveDays`
+
+自动归档的天数阈值。超过此天数未被使用的低质量技能会被建议归档。
+
+- **类型**：`number`
+- **默认值**：`30`
+
+#### `dreamingMaxSuggestions`
+
+每次闲时锻造生成的改进建议最大数量。
+
+- **类型**：`number`
+- **默认值**：`10`
+
+#### `dreamingDarwinAutoApprove`
+
+闲时锻造中达尔文模式优化后的技能是否自动批准。
+
+- **类型**：`boolean`
+- **默认值**：`false`
+
+#### `dreamingTaotieAutoApprove`
+
+闲时锻造中饕餮模式融合后的技能是否自动批准。
+
+- **类型**：`boolean`
+- **默认值**：`false`
 
 ---
 
-## 完整配置示例
+### 技能编排
 
-以下是一个面向「重度使用者」的配置示例，开启智能注入、提高质量门槛、启用闲时锻造：
+#### `orchestrationEnabled`
 
-```yaml
-- id: dsh-skill-forge
-  name: dsh-skill-forge
-  config:
-    securityLevel: strict
-    autoTrigger: false
-    triggerThreshold: 0.5
-    maxIterations: 5
-    verificationPassThreshold: 0.92
-    skillCountAlertThreshold: 50
-    tokenBudgetRatio: 0.12
-    injectionMode: smart
-    injectionTokenBudget: 0
-    injectionRelevanceThreshold: 0.25
-    enableDreaming: true
-    dreamingSchedule: "0 2 * * 0"
-    customDangerousPatterns:
-      - "rm -rf /"
-      - "> /dev/sda"
-    workspaceRoot: "/Users/yourname/skills-repo"
-```
+是否启用技能编排。开启后，复杂任务会自动分解为多个子任务，分别调用不同技能。
+
+- **类型**：`boolean`
+- **默认值**：`true`
+
+#### `orchestrationDecomposeMode`
+
+任务分解模式。
+
+| 模式 | 说明 |
+|------|------|
+| `fast` | 基于关键词快速匹配，零 LLM 消耗 |
+| `llm` | 使用 LLM 做语义分解，更精准但消耗 token |
+| `auto` | 简单任务用 fast，复杂任务用 llm |
+
+- **类型**：`string`
+- **默认值**：`auto`
+
+#### `orchestrationMatchThreshold`
+
+技能匹配的最低相关度阈值。
+
+- **类型**：`number`
+- **范围**：`0` – `1`
+- **默认值**：`0.3`
+
+#### `orchestrationMaxSkills`
+
+单个任务最多编排的技能数量。
+
+- **类型**：`number`
+- **默认值**：`5`
 
 ---
 
@@ -260,13 +564,16 @@
 | `maxIterations` | 下一次锻造开始时生效 |
 | `verificationPassThreshold` | 下一次验证时生效 |
 | `skillCountAlertThreshold` | 即时生效 |
-| `tokenBudgetRatio` | 下一轮对话生效 |
+| `workspaceRoot` | 重启后生效 |
 | `injectionMode` | 即时生效（重新计算注入列表） |
+| `tokenBudgetRatio` | 下一轮对话生效 |
 | `injectionTokenBudget` | 下一轮对话生效 |
 | `injectionRelevanceThreshold` | 下一轮对话生效 |
 | `enableDreaming` | 即时生效 |
 | `dreamingSchedule` | 即时生效（重新注册定时器） |
 | `customDangerousPatterns` | 下一次审计时生效 |
-| `workspaceRoot` | 需要重启 DSH |
-
-绝大多数配置修改后即时生效，无需重启 DSH。`workspaceRoot` 涉及文件系统路径变更，修改后需要重启才能生效。
+| `enableRewardLearning` | 即时生效 |
+| `taotieEnabled` | 即时生效 |
+| `darwinMaxIterations` | 下一次达尔文优化时生效 |
+| `coevoEnabled` | 即时生效 |
+| `orchestrationEnabled` | 即时生效 |

@@ -16,7 +16,7 @@ export function SkillForgePanel() {
       const [r, s, st] = await Promise.all([
         api.getQueue(), api.getSkills(), api.getStats(),
       ])
-      setRuns(r); setSkills(s); setStats(st)
+      setRuns(r as any[]); setSkills(s as any[]); setStats(st as any)
     } catch (err) {
       console.error('[skill-forge] fetch failed:', err)
     }
@@ -28,7 +28,7 @@ export function SkillForgePanel() {
     return () => clearInterval(t)
   }, [fetchData])
 
-  const pendingCount = runs.filter((r: any) => r.status === 'pending_approval').length
+  const pendingCount = runs.filter(r => r.status === 'pending_approval').length
 
   return React.createElement('div', { className: 'sf-panel' },
     React.createElement('div', { className: 'sf-panel-header' },
@@ -48,7 +48,7 @@ export function SkillForgePanel() {
       activeTab === 'queue' && React.createElement('div', { className: 'sf-empty' },
         runs.length === 0
           ? React.createElement('p', null, '暂无锻造任务')
-          : runs.map((r: any) => React.createElement('div', { key: r.id, className: 'sf-queue-item' },
+          : runs.map(r => React.createElement('div', { key: r.id, className: 'sf-queue-item' },
             React.createElement('div', { className: 'sf-queue-header' },
               React.createElement('span', { className: 'sf-queue-title' },
                 r.generatedSkill?.frontmatter?.name || r.sourceSummary?.substring(0, 30) || '未命名'),
@@ -76,7 +76,7 @@ export function SkillForgePanel() {
       activeTab === 'skills' && React.createElement('div', { className: 'sf-empty' },
         skills.length === 0
           ? React.createElement('p', null, '技能库为空')
-          : skills.map((s: any) => React.createElement('div', { key: s.id, className: 'sf-skill-item' },
+          : skills.map(s => React.createElement('div', { key: s.id, className: 'sf-skill-item' },
             React.createElement('div', { className: 'sf-skill-header' },
               React.createElement('span', { className: 'sf-skill-name' }, s.frontmatter?.name),
               React.createElement('span', { className: `sf-skill-status sf-status-${s.status}` }, s.status),

@@ -52,7 +52,7 @@ export function SkillLibrary({ skills, onArchive, onUnarchive }: Props) {
         <select
           className="sf-filter"
           value={filter}
-          onChange={(e) => setFilter(e.target.value as any)}
+          onChange={(e) => setFilter(e.target.value as SkillStatus | 'all')}
         >
           <option value="all">全部 ({skills.length})</option>
           <option value="active">已激活 ({skills.filter(s => s.status === 'active').length})</option>

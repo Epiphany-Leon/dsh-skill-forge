@@ -7,6 +7,10 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import { readdirSync, existsSync } from 'node:fs'
+import { join, resolve, isAbsolute } from 'node:path'
+import { exec } from 'node:child_process'
 import Schema from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 
@@ -26,10 +30,9 @@ import { GeneratorAgent } from './agents/GeneratorAgent.js'
 import { VerifierAgent } from './agents/VerifierAgent.js'
 import { RefinerAgent } from './agents/RefinerAgent.js'
 import { AdversarialTestGenerator } from './agents/AdversarialTestGenerator.js'
-import { readdirSync, statSync, existsSync } from 'node:fs'
-import { join, resolve, isAbsolute } from 'node:path'
-import { exec } from 'node:child_process'
 import { FORGE_ROUTES } from './services/routes.js'
+import { parseJsonBody, sendJson, sendError, sendOk } from './utils/helpers.js'
+import { FILE_TREE_DEFAULT_MAX_DEPTH, FILE_TREE_SKIP_DIRS, DAY_MS } from './utils/constants.js'
 
 /** 插件显示名。 */
 export const name = 'dsh-skill-forge'
@@ -336,15 +339,15 @@ export function apply(ctx: Context, config: Config) {
   }))
 
   // ---- 注册 HTTP API 路由（Host ↔ Client 数据桥接） ----
-  const routeHandlers: Record<string, any> = {
-    '/api/skill-forge/queue': (req: any, res: any) => {
+  const routeHandlers: Record<string, (req: IncomingMessage, res: ServerResponse) => void | Promise<void>> = {
+    '/api/skill-forge/queue': (req, res) => {
       if (req.method !== 'GET') { res.writeHead(405).end(); return }
       const url = new URL(req.url!, `http://${req.headers.host}`)
       const limit = parseInt(url.searchParams.get('limit') || '20')
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify(orchestrator.listRuns(limit)))
     },
-    '/api/skill-forge/skills': (req: any, res: any) => {
+    '/api/skill-forge/skills': (req, res) => {
       if (req.method !== 'GET') { res.writeHead(405).end(); return }
       try {
         const url = new URL(req.url!, `http://${req.headers.host}`)
@@ -370,7 +373,7 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/skills/top': (req: any, res: any) => {
+    '/api/skill-forge/skills/top': (req, res) => {
       if (req.method !== 'GET') { res.writeHead(405).end(); return }
       try {
         const url = new URL(req.url!, `http://${req.headers.host}`)
@@ -382,7 +385,7 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/stats': (_req: any, res: any) => {
+    '/api/skill-forge/stats': (_req, res) => {
       try {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify(registry.getStats()))
@@ -391,13 +394,12 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/stats/detail': (_req: any, res: any) => {
+    '/api/skill-forge/stats/detail': (_req, res) => {
       try {
         const base = registry.getDetailedStats()
         const allRuns = orchestrator.listRuns(100)
 
         // 最近 7 天日统计
-        const dayMs = 24 * 60 * 60 * 1000
         const now = Date.now()
         const dailyStats: Array<{
           date: string
@@ -406,9 +408,9 @@ export function apply(ctx: Context, config: Config) {
           usageCount: number
         }> = []
         for (let i = 6; i >= 0; i--) {
-          const dayStart = new Date(now - i * dayMs)
+          const dayStart = new Date(now - i * DAY_MS)
           dayStart.setHours(0, 0, 0, 0)
-          const dayEnd = dayStart.getTime() + dayMs
+          const dayEnd = dayStart.getTime() + DAY_MS
           const dateStr = `${dayStart.getMonth() + 1}/${dayStart.getDate()}`
           const forgeCount = allRuns.filter(r => r.createdAt >= dayStart.getTime() && r.createdAt < dayEnd).length
           const newSkills = registry.listSkills().filter(s => s.createdAt >= dayStart.getTime() && s.createdAt < dayEnd).length
@@ -470,7 +472,7 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/stats/trigger': (_req: any, res: any) => {
+    '/api/skill-forge/stats/trigger': (_req, res) => {
       try {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify(trigger.getStats()))
@@ -479,10 +481,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/trigger': async (req: any, res: any) => {
+    '/api/skill-forge/trigger': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const result = await orchestrator.startManualForge(body.reason || 'Manual forge')
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify(result))
@@ -492,10 +494,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/approve': async (req: any, res: any) => {
+    '/api/skill-forge/approve': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const ok = await orchestrator.approveSkill(body.runId)
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok }))
@@ -504,10 +506,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/reject': async (req: any, res: any) => {
+    '/api/skill-forge/reject': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const ok = await orchestrator.rejectSkill(body.runId, body.reasons || [], body.customText)
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok }))
@@ -516,10 +518,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/cancel': async (req: any, res: any) => {
+    '/api/skill-forge/cancel': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const ok = await orchestrator.cancelForge(body.runId)
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok }))
@@ -528,10 +530,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/retry': async (req: any, res: any) => {
+    '/api/skill-forge/retry': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const ok = await orchestrator.retryRun(body.runId)
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok }))
@@ -540,10 +542,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/archive': async (req: any, res: any) => {
+    '/api/skill-forge/archive': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const ok = await registry.archiveSkill(body.skillId)
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok }))
@@ -552,10 +554,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/unarchive': async (req: any, res: any) => {
+    '/api/skill-forge/unarchive': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const ok = await registry.unarchiveSkill(body.skillId)
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok }))
@@ -565,7 +567,7 @@ export function apply(ctx: Context, config: Config) {
       }
     },
     // 技能详情
-    '/api/skill-forge/skill-detail': async (req: any, res: any) => {
+    '/api/skill-forge/skill-detail': async (req, res) => {
       if (req.method !== 'GET') { res.writeHead(405).end(); return }
       try {
         const url = new URL(req.url!, `http://${req.headers.host}`)
@@ -581,7 +583,7 @@ export function apply(ctx: Context, config: Config) {
       }
     },
     // 技能版本列表
-    '/api/skill-forge/skill-versions': async (req: any, res: any) => {
+    '/api/skill-forge/skill-versions': async (req, res) => {
       if (req.method !== 'GET') { res.writeHead(405).end(); return }
       try {
         const url = new URL(req.url!, `http://${req.headers.host}`)
@@ -598,7 +600,7 @@ export function apply(ctx: Context, config: Config) {
       }
     },
     // 指定版本内容
-    '/api/skill-forge/skill-version': async (req: any, res: any) => {
+    '/api/skill-forge/skill-version': async (req, res) => {
       if (req.method !== 'GET') { res.writeHead(405).end(); return }
       try {
         const url = new URL(req.url!, `http://${req.headers.host}`)
@@ -617,10 +619,10 @@ export function apply(ctx: Context, config: Config) {
       }
     },
     // 回滚版本
-    '/api/skill-forge/skill-rollback': async (req: any, res: any) => {
+    '/api/skill-forge/skill-rollback': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const name = body.name
         const version = body.version
         if (!name || !version) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'name and version are required' })); return }
@@ -637,10 +639,10 @@ export function apply(ctx: Context, config: Config) {
       }
     },
     // 取消归档（复活）
-    '/api/skill-forge/skill-unarchive': async (req: any, res: any) => {
+    '/api/skill-forge/skill-unarchive': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const skill = registry.getSkillByName(body.name)
         if (!skill) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Skill not found' })); return }
         const ok = await registry.unarchiveSkill(skill.id)
@@ -652,10 +654,10 @@ export function apply(ctx: Context, config: Config) {
       }
     },
     // 重新锻造
-    '/api/skill-forge/skill-reforge': async (req: any, res: any) => {
+    '/api/skill-forge/skill-reforge': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const skill = registry.getSkillByName(body.name)
         if (!skill) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Skill not found' })); return }
         const result = await (orchestrator as any).reforgeSkill?.(skill.id, body.reason)
@@ -668,10 +670,10 @@ export function apply(ctx: Context, config: Config) {
       }
     },
     // 记录使用
-    '/api/skill-forge/skill-usage': async (req: any, res: any) => {
+    '/api/skill-forge/skill-usage': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const skill = registry.getSkillByName(body.name)
         if (!skill) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Skill not found' })); return }
         await registry.recordUsage(skill.id)
@@ -683,10 +685,10 @@ export function apply(ctx: Context, config: Config) {
       }
     },
     // 记录使用反馈
-    '/api/skill-forge/skill-feedback': async (req: any, res: any) => {
+    '/api/skill-forge/skill-feedback': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const skill = registry.getSkillByName(body.name)
         if (!skill) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Skill not found' })); return }
         if (!body.rating || !['helpful', 'neutral', 'harmful'].includes(body.rating)) {
@@ -711,10 +713,10 @@ export function apply(ctx: Context, config: Config) {
       }
     },
     // 更新技能
-    '/api/skill-forge/skill-update': async (req: any, res: any) => {
+    '/api/skill-forge/skill-update': async (req, res) => {
       if (req.method !== 'PUT') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const skill = registry.getSkillByName(body.name)
         if (!skill) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Skill not found' })); return }
         const updated = await registry.updateSkill(skill.id, {
@@ -730,7 +732,7 @@ export function apply(ctx: Context, config: Config) {
       }
     },
     // 删除技能
-    '/api/skill-forge/skill-delete': async (req: any, res: any) => {
+    '/api/skill-forge/skill-delete': async (req, res) => {
       if (req.method !== 'DELETE') { res.writeHead(405).end(); return }
       try {
         const url = new URL(req.url!, `http://${req.headers.host}`)
@@ -749,7 +751,7 @@ export function apply(ctx: Context, config: Config) {
     // ============================================================
     // 饕餮模式（Taotie Fusion）
     // ============================================================
-    '/api/skill-forge/taotie-detect': (req: any, res: any) => {
+    '/api/skill-forge/taotie-detect': (req, res) => {
       if (req.method !== 'GET') { res.writeHead(405).end(); return }
       try {
         const url = new URL(req.url!, `http://${req.headers.host}`)
@@ -763,10 +765,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/taotie-analyze': async (req: any, res: any) => {
+    '/api/skill-forge/taotie-analyze': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const { target, source } = body
         if (!target || !source) {
           res.writeHead(400, { 'Content-Type': 'application/json' })
@@ -781,10 +783,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/taotie-start': async (req: any, res: any) => {
+    '/api/skill-forge/taotie-start': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const { target, source, autoApprove } = body
         if (!target || !source) {
           res.writeHead(400, { 'Content-Type': 'application/json' })
@@ -799,7 +801,7 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/taotie-status': (req: any, res: any) => {
+    '/api/skill-forge/taotie-status': (req, res) => {
       if (req.method !== 'GET') { res.writeHead(405).end(); return }
       try {
         const url = new URL(req.url!, `http://${req.headers.host}`)
@@ -823,10 +825,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/taotie-approve': async (req: any, res: any) => {
+    '/api/skill-forge/taotie-approve': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const { runId, step, stepIndex } = body
         if (!runId) {
           res.writeHead(400, { 'Content-Type': 'application/json' })
@@ -843,10 +845,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/taotie-stop': async (req: any, res: any) => {
+    '/api/skill-forge/taotie-stop': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const { runId } = body
         if (!runId) {
           res.writeHead(400, { 'Content-Type': 'application/json' })
@@ -861,7 +863,7 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/taotie-patterns': (_req: any, res: any) => {
+    '/api/skill-forge/taotie-patterns': (_req, res) => {
       if (_req.method !== 'GET') { res.writeHead(405).end(); return }
       try {
         const patterns = taotie.getGlobalPatterns()
@@ -872,7 +874,7 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/config': async (req: any, res: any) => {
+    '/api/skill-forge/config': async (req, res) => {
       if (req.method === 'GET') {
         try {
           res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -886,7 +888,7 @@ export function apply(ctx: Context, config: Config) {
       // PUT — 更新配置（热更新）
       if (req.method === 'PUT') {
         try {
-          const body = await readBody(req)
+          const body = await parseJsonBody(req) as Record<string, any>
           // 浅合并到 config 对象
           let changed = false
           for (const key of Object.keys(body)) {
@@ -909,10 +911,10 @@ export function apply(ctx: Context, config: Config) {
       }
       res.writeHead(405).end()
     },
-    '/api/skill-forge/file-tree': async (req: any, res: any) => {
+    '/api/skill-forge/file-tree': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const rootPath = resolveWorkspaceRoot()
         // 如果 body.path 是绝对路径则直接用，否则相对 workspaceRoot 解析
         const basePath = body.path && body.path !== '.'
@@ -929,10 +931,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/open-file': async (req: any, res: any) => {
+    '/api/skill-forge/open-file': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const rootPath = resolveWorkspaceRoot()
         const filePath = isAbsolute(body.path)
           ? body.path
@@ -952,7 +954,7 @@ export function apply(ctx: Context, config: Config) {
       }
     },
     // 版本 diff 对比
-    '/api/skill-forge/skill-diff': async (req: any, res: any) => {
+    '/api/skill-forge/skill-diff': async (req, res) => {
       if (req.method !== 'GET') { res.writeHead(405).end(); return }
       try {
         const url = new URL(req.url!, `http://${req.headers.host}`)
@@ -979,7 +981,7 @@ export function apply(ctx: Context, config: Config) {
       }
     },
     // 谱系追踪
-    '/api/skill-forge/skill-lineage': async (req: any, res: any) => {
+    '/api/skill-forge/skill-lineage': async (req, res) => {
       if (req.method !== 'GET') { res.writeHead(405).end(); return }
       try {
         const url = new URL(req.url!, `http://${req.headers.host}`)
@@ -994,7 +996,7 @@ export function apply(ctx: Context, config: Config) {
       }
     },
     // 相关技能推荐
-    '/api/skill-forge/skill-related': async (req: any, res: any) => {
+    '/api/skill-forge/skill-related': async (req, res) => {
       if (req.method !== 'GET') { res.writeHead(405).end(); return }
       try {
         const url = new URL(req.url!, `http://${req.headers.host}`)
@@ -1013,7 +1015,7 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/workspace-info': (_req: any, res: any) => {
+    '/api/skill-forge/workspace-info': (_req, res) => {
       const rootPath = resolveWorkspaceRoot()
       const workspaces = ctx.workspaceRegistry?.list?.() ?? []
       res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -1030,10 +1032,10 @@ export function apply(ctx: Context, config: Config) {
     // ============================================================
     // 达尔文模式（Darwin Mode）—— 单体技能爬山优化系统
     // ============================================================
-    '/api/skill-forge/darwin-start': async (req: any, res: any) => {
+    '/api/skill-forge/darwin-start': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const { skillName, targetDimensions, autoApprove } = body
         if (!skillName) {
           res.writeHead(400, { 'Content-Type': 'application/json' })
@@ -1052,7 +1054,7 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/darwin-status': async (req: any, res: any) => {
+    '/api/skill-forge/darwin-status': async (req, res) => {
       if (req.method !== 'GET') { res.writeHead(405).end(); return }
       try {
         const url = new URL(req.url!, `http://${req.headers.host}`)
@@ -1077,10 +1079,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/darwin-approve': async (req: any, res: any) => {
+    '/api/skill-forge/darwin-approve': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const { runId, dimension } = body
         if (!runId || !dimension) {
           res.writeHead(400, { 'Content-Type': 'application/json' })
@@ -1095,10 +1097,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/darwin-reject': async (req: any, res: any) => {
+    '/api/skill-forge/darwin-reject': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const { runId, dimension, reason } = body
         if (!runId || !dimension) {
           res.writeHead(400, { 'Content-Type': 'application/json' })
@@ -1113,10 +1115,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/darwin-stop': async (req: any, res: any) => {
+    '/api/skill-forge/darwin-stop': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const { runId, reason } = body
         if (!runId) {
           res.writeHead(400, { 'Content-Type': 'application/json' })
@@ -1131,7 +1133,7 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/darwin-runs': async (req: any, res: any) => {
+    '/api/skill-forge/darwin-runs': async (req, res) => {
       if (req.method !== 'GET') { res.writeHead(405).end(); return }
       try {
         const url = new URL(req.url!, `http://${req.headers.host}`)
@@ -1146,10 +1148,10 @@ export function apply(ctx: Context, config: Config) {
     // ============================================================
     // CoEvo 共进化验证模式
     // ============================================================
-    '/api/skill-forge/coevo-start': async (req: any, res: any) => {
+    '/api/skill-forge/coevo-start': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const { skillName, autoApprove, maxRounds, targetSkillScore, targetTestStrength } = body
         if (!skillName) {
           res.writeHead(400, { 'Content-Type': 'application/json' })
@@ -1169,7 +1171,7 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/coevo-status': async (req: any, res: any) => {
+    '/api/skill-forge/coevo-status': async (req, res) => {
       if (req.method !== 'GET') { res.writeHead(405).end(); return }
       try {
         const url = new URL(req.url!, `http://${req.headers.host}`)
@@ -1193,10 +1195,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/coevo-approve': async (req: any, res: any) => {
+    '/api/skill-forge/coevo-approve': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const { runId } = body
         if (!runId) {
           res.writeHead(400, { 'Content-Type': 'application/json' })
@@ -1211,10 +1213,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/coevo-reject': async (req: any, res: any) => {
+    '/api/skill-forge/coevo-reject': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const { runId, reason } = body
         if (!runId) {
           res.writeHead(400, { 'Content-Type': 'application/json' })
@@ -1229,10 +1231,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/coevo-stop': async (req: any, res: any) => {
+    '/api/skill-forge/coevo-stop': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const { runId, reason } = body
         if (!runId) {
           res.writeHead(400, { 'Content-Type': 'application/json' })
@@ -1247,7 +1249,7 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/coevo-runs': async (req: any, res: any) => {
+    '/api/skill-forge/coevo-runs': async (req, res) => {
       if (req.method !== 'GET') { res.writeHead(405).end(); return }
       try {
         const url = new URL(req.url!, `http://${req.headers.host}`)
@@ -1260,10 +1262,10 @@ export function apply(ctx: Context, config: Config) {
       }
     },
     // 技能编排
-    '/api/skill-forge/orchestrate': async (req: any, res: any) => {
+    '/api/skill-forge/orchestrate': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const task = body.task || body.query || ''
         if (!task) {
           res.writeHead(400, { 'Content-Type': 'application/json' })
@@ -1284,7 +1286,7 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/orchestrator/stats': (_req: any, res: any) => {
+    '/api/skill-forge/orchestrator/stats': (_req, res) => {
       try {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify(skillOrchestrator.getStats()))
@@ -1296,10 +1298,10 @@ export function apply(ctx: Context, config: Config) {
     // ============================================================
     // Dreaming 闲时锻造模式
     // ============================================================
-    '/api/skill-forge/dreaming/start': async (req: any, res: any) => {
+    '/api/skill-forge/dreaming/start': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const triggerType = (body.triggerType as 'manual' | 'scheduled' | 'idle') || 'manual'
         const run = await dreaming.startDreaming(triggerType)
         res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -1309,10 +1311,10 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/dreaming/stop': async (req: any, res: any) => {
+    '/api/skill-forge/dreaming/stop': async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(405).end(); return }
       try {
-        const body = await readBody(req)
+        const body = await parseJsonBody(req) as Record<string, any>
         const ok = dreaming.stopDreaming(body?.reason)
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok }))
@@ -1321,7 +1323,7 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/dreaming/status': (_req: any, res: any) => {
+    '/api/skill-forge/dreaming/status': (_req, res) => {
       try {
         const current = dreaming.getCurrentRun()
         res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -1331,7 +1333,7 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/dreaming/history': (_req: any, res: any) => {
+    '/api/skill-forge/dreaming/history': (_req, res) => {
       try {
         const url = new URL(_req.url!, `http://${_req.headers.host}`)
         const limit = parseInt(url.searchParams.get('limit') || '20')
@@ -1343,7 +1345,7 @@ export function apply(ctx: Context, config: Config) {
         res.end(JSON.stringify({ error: (e as Error).message }))
       }
     },
-    '/api/skill-forge/dreaming/health-report': async (_req: any, res: any) => {
+    '/api/skill-forge/dreaming/health-report': async (_req, res) => {
       if (_req.method !== 'GET') { res.writeHead(405).end(); return }
       try {
         const report = await dreaming.generateHealthReport()
@@ -1396,18 +1398,9 @@ export function apply(ctx: Context, config: Config) {
   })
 }
 
-/** 读取请求体 */
-function readBody(req: any): Promise<any> {
-  return new Promise((resolve) => {
-    const chunks: Buffer[] = []
-    req.on('data', (c: Buffer) => chunks.push(c))
-    req.on('end', () => {
-      try {
-        const body = Buffer.concat(chunks).toString('utf-8')
-        resolve(body ? JSON.parse(body) : {})
-      } catch { resolve({}) }
-    })
-  })
+/** 读取请求体 —— 已迁移到 utils/helpers.ts 的 parseJsonBody，保留此函数作为兼容层 */
+function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  return parseJsonBody(req)
 }
 
 /** 构建文件树 */
@@ -1415,19 +1408,26 @@ function buildFileTree(
   dirPath: string,
   showHidden: boolean,
   maxDepth: number,
-): Array<{ name: string; type: 'file' | 'directory'; path: string; children?: any[] }> {
+): Array<{ name: string; type: 'file' | 'directory'; path: string; children?: Array<{ name: string; type: 'file' | 'directory'; path: string; children?: unknown[] }> }> {
   if (maxDepth <= 0) return []
+
+  type FileTreeNode = {
+    name: string
+    type: 'file' | 'directory'
+    path: string
+    children?: FileTreeNode[]
+  }
 
   try {
     const entries = readdirSync(dirPath, { withFileTypes: true })
-    const result: any[] = []
+    const result: FileTreeNode[] = []
 
     for (const entry of entries) {
       if (!showHidden && entry.name.startsWith('.')) continue
-      if (entry.name === 'node_modules' || entry.name === '.git') continue
+      if (FILE_TREE_SKIP_DIRS.has(entry.name)) continue
 
       const fullPath = join(dirPath, entry.name)
-      const item: any = {
+      const item: FileTreeNode = {
         name: entry.name,
         path: fullPath,
         type: entry.isDirectory() ? 'directory' : 'file',
@@ -1435,7 +1435,7 @@ function buildFileTree(
 
       if (entry.isDirectory() && maxDepth > 1) {
         try {
-          item.children = buildFileTree(fullPath, showHidden, maxDepth - 1)
+          item.children = buildFileTree(fullPath, showHidden, maxDepth - 1) as FileTreeNode[]
         } catch {
           item.children = []
         }

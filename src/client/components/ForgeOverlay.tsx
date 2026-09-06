@@ -22,7 +22,7 @@ export function ForgeOverlay({ onClose }: ForgeOverlayProps): React.ReactElement
       const [r, s, st] = await Promise.all([
         api.getQueue(), api.getSkills(), api.getStats(),
       ])
-      setRuns(r); setSkills(s); setStats(st)
+      setRuns(r as any[]); setSkills(s as any[]); setStats(st as any)
     } catch (err) {
       console.error('[skill-forge] fetch failed:', err)
     }
@@ -34,7 +34,7 @@ export function ForgeOverlay({ onClose }: ForgeOverlayProps): React.ReactElement
     return () => clearInterval(t)
   }, [fetchData])
 
-  const pendingCount = runs.filter((r: any) => r.status === 'pending_approval').length
+  const pendingCount = runs.filter(r => r.status === 'pending_approval').length
 
   const handleTrigger = async () => {
     setTriggering(true)
@@ -95,7 +95,7 @@ export function ForgeOverlay({ onClose }: ForgeOverlayProps): React.ReactElement
                 React.createElement('p', null, '暂无锻造任务'),
                 React.createElement('p', { className: 'sf-empty-hint' }, '点击上方按钮开始首次锻造'),
               )
-            : runs.map((r: any) => React.createElement('div', {
+            : runs.map(r => React.createElement('div', {
                 key: r.id,
                 className: `sf-queue-item sf-queue-${r.status}`,
               },
@@ -142,7 +142,7 @@ export function ForgeOverlay({ onClose }: ForgeOverlayProps): React.ReactElement
             ? React.createElement('div', { className: 'sf-empty' },
                 React.createElement('p', null, '技能库为空'),
               )
-            : skills.map((s: any) => React.createElement('div', {
+            : skills.map(s => React.createElement('div', {
                 key: s.id,
                 className: 'sf-skill-item',
               },

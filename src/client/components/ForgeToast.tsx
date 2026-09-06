@@ -143,7 +143,9 @@ export function ForgeToastContainer({ onNavigateToRun }: ForgeToastContainerProp
     toastStore.setMuted(!toastStore.isMuted())
   }, [])
 
-  if (toasts.length === 0) return React.createElement('div', { style: { display: 'none' } })
+  if (toasts.length === 0) {
+    return React.createElement('div', { style: { display: 'none' } })
+  }
 
   return React.createElement('div', { className: 'sf-toast-container' },
     // 静音按钮

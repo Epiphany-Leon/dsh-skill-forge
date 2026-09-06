@@ -21,6 +21,14 @@ import { registerSettingsSection } from './settings-section.js'
 import { api } from './api.js'
 import { toastStore } from './toast-store.js'
 
+// 扩展 Window 类型，声明我们挂载的全局调试变量
+declare global {
+  interface Window {
+    __sf_state?: GlobalState
+    __sf_notify?: () => void
+  }
+}
+
 /** 依赖的服务。 */
 export const inject = ['slots']
 
@@ -99,8 +107,8 @@ function observeAndInjectButton(): void {
 
 function injectUI(): void {
   // 暴露全局状态给设置面板等组件读写
-  ;(window as any).__sf_state = state
-  ;(window as any).__sf_notify = () => {
+  window.__sf_state = state
+  window.__sf_notify = () => {
     listeners.forEach(l => l())
     updateLayout()
   }

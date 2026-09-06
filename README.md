@@ -20,27 +20,43 @@ Each skill passes through seven quality gates before activation: trigger, extrac
 
 ### Multi-Agent Collaboration
 
-Five specialized agents work in a coordinated pipeline. The Extractor distills patterns from conversations. The Generator drafts skill documents. The Verifier runs multi-dimensional validation. The Refiner performs incremental optimization based on feedback. The Auditor handles security and duplication checks. Each role carries independent prompts and evaluation criteria for full transparency.
+Six specialized agents work in a coordinated pipeline. The Extractor distills patterns from conversations. The Generator drafts skill documents. The Verifier runs multi-dimensional validation. The Refiner performs incremental optimization based on feedback. The Adversarial Test Generator creates challenging test cases for co-evolution. The Auditor handles security and duplication checks. Each role carries independent prompts and evaluation criteria for full transparency.
 
 ### Verification-Driven Iteration
 
 Built on the insight of SkillOpt-style textual gradient descent. When verification fails, the Refiner Agent locates specific issues from failure patterns and applies targeted rewrites instead of full regeneration. The system enforces non-regressive quality across iterations, with a configurable maximum round count (three by default).
 
+### Three Evolutionary Modes
+
+Three evolution engines continuously improve the skill library:
+
+- **Darwin Mode**: Hill-climbing optimization for individual skills, with 10-dimension evaluation, ratchet-style non-regression, and human-in-the-loop approval.
+- **Taotie Mode (Fusion)**: Five-stage cross-skill fusion that merges similar skills into stronger ones, with pattern library沉淀 of successful fusion patterns.
+- **CoEvo Mode**: Co-evolution where skills and adversarial test suites evolve in alternating rounds, pushing both sides toward higher quality.
+
+### Dreaming Engine
+
+Off-peak batch optimization that runs during idle time. The engine performs health checks on the skill library, batch-optimizes low-scoring skills, auto-fuses similar skills, and generates improvement suggestions. Three trigger modes are supported: manual, cron schedule, and idle detection. All changes follow strict non-regression and never auto-delete.
+
+### Skill Orchestration
+
+Complex task decomposition and multi-skill workflow composition. The orchestrator breaks tasks into subtasks (fast keyword matching or LLM-based semantic decomposition), matches relevant skills from the library, and generates execution guidance. Supports up to 5 skills per task with configurable relevance thresholds.
+
 ### Four-Layer Security Defense
 
-Security coverage spans the full skill lifecycle: generation-time, verification-time, storage-time, and usage-time safety. Auto-generated content receives default distrust. Dangerous pattern matching, duplicate detection, and manual approval form three layers of guardrails.
+Security coverage spans the full skill lifecycle: generation-time, verification-time, storage-time, and usage-time safety. Auto-generated content receives default distrust. Dangerous pattern matching, duplicate detection, and manual approval form three layers of guardrails. All evolutionary modes default to human-in-the-loop approval.
 
 ### Full Provenance Tracking
 
-Every skill carries a complete family tree: source conversation IDs, forge round records, per-round verification scores, version changelogs, and usage feedback statistics. Full auditability lets you trace where a skill came from, how it evolved, and how it performs.
+Every skill carries a complete family tree: source conversation IDs, forge round records, per-round verification scores, version changelogs, usage feedback statistics, and lineage graphs (derived skills, related skills). Full auditability lets you trace where a skill came from, how it evolved, and how it performs.
 
 ### Smart Recall Engine
 
-Four-dimensional weighted scoring combines verification score, usage frequency, keyword match, and freshness with token budget management. Smart injection replaces the blanket registration approach by dynamically selecting the most relevant skills per conversation turn. The approach reduces skill pollution and lowers token consumption within an optimal recall envelope.
+Five-dimensional weighted scoring combines verification score, usage frequency, keyword match, freshness, and feedback score with token budget management. Smart injection replaces the blanket registration approach by dynamically selecting the most relevant skills per conversation turn. Reward-driven weight auto-adjustment learns from both explicit and implicit user feedback.
 
 ### Native DSH Web Integration
 
-Deeply embedded in the DSH Web UI. A right sidebar hosts the forge queue and skill library. A top bar shows forge status with quick actions. Toast notifications push real-time progress updates. The entire workflow from trigger to approval completes inside the conversation interface.
+Deeply embedded in the DSH Web UI. A right sidebar hosts the forge queue, skill library, file browser, statistics dashboard, and settings. A top bar shows forge status with quick actions. Toast notifications push real-time progress updates with one-click approve/reject. The entire workflow from trigger to approval completes inside the conversation interface.
 
 ---
 
@@ -49,7 +65,7 @@ Deeply embedded in the DSH Web UI. A right sidebar hosts the forge queue and ski
 ### Prerequisites
 
 - DeepSeek Harness (DSH) 0.1.0-rc.5 or higher
-- Node.js 18+
+- Node.js 20+
 - A configured DSH web profile
 
 ### Installation
@@ -127,23 +143,36 @@ dsh-skill-forge/
 │   ├── index.ts              # Host entry (Cordis plugin)
 │   ├── types.ts              # Global type definitions
 │   ├── prompts/              # Agent System Prompts
-│   ├── services/             # Host services
+│   ├── services/             # Host services (12 modules)
 │   │   ├── ForgeOrchestrator.ts   # Core orchestrator
-│   │   ├── TriggerEngine.ts       # Trigger engine
+│   │   ├── TriggerEngine.ts       # Incremental trigger engine
 │   │   ├── SkillRegistry.ts       # Versioned skill registry
-│   │   ├── SecurityAuditor.ts     # Security auditor
 │   │   ├── InjectionEngine.ts     # Smart injection engine
-│   │   └── SkillForgeService.ts   # Public service interface
-│   ├── agents/               # LLM Agents
+│   │   ├── SecurityAuditor.ts     # Security auditor
+│   │   ├── SkillForgeService.ts   # Public service + HTTP routes
+│   │   ├── DarwinOptimizer.ts     # Darwin mode - hill climbing
+│   │   ├── TaotieFusion.ts        # Taotie mode - skill fusion
+│   │   ├── CoEvoOrchestrator.ts   # CoEvo mode - co-evolution
+│   │   ├── DreamingEngine.ts      # Dreaming mode - batch optimize
+│   │   └── SkillOrchestrator.ts   # Skill orchestration
+│   ├── agents/               # LLM Agents (6 roles)
 │   │   ├── ExtractorAgent.ts
 │   │   ├── GeneratorAgent.ts
 │   │   ├── VerifierAgent.ts
-│   │   └── RefinerAgent.ts
-│   └── client/               # React client
+│   │   ├── RefinerAgent.ts
+│   │   └── AdversarialTestGenerator.ts
+│   └── client/               # React client (15+ components)
 │       ├── index.tsx
 │       └── components/       # UI components
+├── docs/                     # Documentation
+│   ├── quickstart.md
+│   ├── configuration.md
+│   └── faq.md
 ├── cordis.patch.yml          # DSH plugin configuration
 ├── tsdown.config.ts          # Build configuration
+├── CHANGELOG.md              # Release notes
+├── STATUS.md                 # Project progress tracking
+├── CONTRIBUTING.md           # Contribution guide
 └── package.json
 ```
 

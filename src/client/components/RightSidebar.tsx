@@ -8,6 +8,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { FileExplorer } from './FileExplorer.js'
 import { ForgePanel } from './ForgePanel.js'
 import { api } from '../api.js'
+import { MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH } from '../constants.js'
 
 // ============================================================
 // 快速设置面板（侧栏内滑出）
@@ -23,31 +24,41 @@ interface QuickSettings {
   enableIncrementalAccumulation: boolean
 }
 
-function SettingsPanel({ onClose }: { onClose?: () => void }): React.ReactElement {
+interface SettingsPanelProps {
+  onClose?: () => void
+}
+
+function SettingsPanel({ onClose }: SettingsPanelProps): React.ReactElement {
   const [config, setConfig] = useState<QuickSettings | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.getConfig().then((res: any) => {
+    let mounted = true
+    api.getConfig().then(res => {
+      if (!mounted) return
       // 从全局状态读取 UI 相关设置
-      const globalState = (window as any).__sf_state || {}
+      const globalState = (window as { __sf_state?: Partial<QuickSettings> }).__sf_state || {}
+      const r = res as Record<string, unknown> | undefined
       setConfig({
         clickOutsideToClose: globalState.clickOutsideToClose ?? true,
         squeezeMode: globalState.squeezeMode ?? false,
-        autoTrigger: res?.autoTrigger ?? true,
-        injectionMode: res?.injectionMode ?? 'smart',
-        enableIntentAware: res?.enableIntentAware ?? true,
-        enableRewardLearning: res?.enableRewardLearning ?? true,
-        enableIncrementalAccumulation: res?.enableIncrementalAccumulation ?? true,
+        autoTrigger: (r?.autoTrigger as boolean) ?? true,
+        injectionMode: (r?.injectionMode as 'all' | 'smart') ?? 'smart',
+        enableIntentAware: (r?.enableIntentAware as boolean) ?? true,
+        enableRewardLearning: (r?.enableRewardLearning as boolean) ?? true,
+        enableIncrementalAccumulation: (r?.enableIncrementalAccumulation as boolean) ?? true,
       })
       setLoading(false)
-    }).catch(() => setLoading(false))
+    }).catch(() => {
+      if (mounted) setLoading(false)
+    })
+    return () => { mounted = false }
   }, [])
 
-  const updateUIConfig = (patch: Partial<QuickSettings>) => {
+  const updateUIConfig = useCallback((patch: Partial<QuickSettings>) => {
     setConfig(prev => prev ? { ...prev, ...patch } : prev)
     // 更新全局状态
-    const w = window as any
+    const w = window as { __sf_state?: Partial<QuickSettings>; __sf_notify?: () => void }
     if (w.__sf_state) {
       Object.assign(w.__sf_state, patch)
     }
@@ -55,16 +66,25 @@ function SettingsPanel({ onClose }: { onClose?: () => void }): React.ReactElemen
     if (w.__sf_notify) {
       w.__sf_notify()
     }
-  }
+  }, [])
 
-  const updateServerConfig = async (patch: any) => {
-    setConfig(prev => prev ? { ...prev, ...patch } : prev)
+  const updateServerConfig = useCallback(async (patch: Record<string, unknown>) => {
+    setConfig(prev => {
+      if (!prev) return prev
+      const next = { ...prev }
+      for (const key of Object.keys(patch)) {
+        if (key in next) {
+          ;(next as Record<string, unknown>)[key] = patch[key]
+        }
+      }
+      return next
+    })
     try {
       await api.updateConfig(patch)
     } catch (e) {
       console.error('更新配置失败', e)
     }
-  }
+  }, [])
 
   const Toggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) =>
     React.createElement('button', {
@@ -162,7 +182,8 @@ function SettingsPanel({ onClose }: { onClose?: () => void }): React.ReactElemen
           React.createElement('select', {
             className: 'sf-setting-select',
             value: config.injectionMode,
-            onChange: (e: any) => updateServerConfig({ injectionMode: e.target.value }),
+            onChange: (e: React.ChangeEvent<HTMLSelectElement>) =>
+              updateServerConfig({ injectionMode: e.target.value }),
           },
             React.createElement('option', { value: 'all' }, '全部注入'),
             React.createElement('option', { value: 'smart' }, '智能匹配'),
@@ -177,6 +198,10 @@ function SettingsPanel({ onClose }: { onClose?: () => void }): React.ReactElemen
     ),
   )
 }
+
+// ============================================================
+// 主组件
+// ============================================================
 
 interface RightSidebarProps {
   activeTab: 'files' | 'forge'
@@ -208,7 +233,7 @@ export function RightSidebar({
 
     const onMove = (ev: MouseEvent) => {
       const delta = startX.current - ev.clientX
-      const newWidth = Math.max(280, Math.min(800, startWidth.current + delta))
+      const newWidth = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, startWidth.current + delta))
       onWidthChange(newWidth)
     }
     const onUp = () => {

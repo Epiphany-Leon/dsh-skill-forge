@@ -39,7 +39,7 @@ interface JudgeResult {
 }
 
 export class VerifierAgent extends BaseAgent {
-  constructor(ctx: any, config: SkillForgeConfig) {
+  constructor(ctx: unknown, config: SkillForgeConfig) {
     super(ctx, config)
   }
 
@@ -122,15 +122,18 @@ ${skill.body.substring(0, 3000)}
       )
 
       if (result.testCases && Array.isArray(result.testCases)) {
-        const validCases = result.testCases
-          .filter((tc: any) => tc.id && tc.name && tc.category && tc.input)
-          .map((tc: any) => ({
+        const validCases = (result.testCases as Array<Record<string, unknown>>)
+          .filter((tc): tc is { id: string; name: string; category: string; input: string } =>
+            typeof tc.id === 'string' && typeof tc.name === 'string' &&
+            typeof tc.category === 'string' && typeof tc.input === 'string'
+          )
+          .map((tc): TestCase => ({
             id: tc.id,
             name: tc.name,
             category: tc.category as QualityDimension,
             input: tc.input,
           }))
-          .slice(0, 8) as TestCase[]
+          .slice(0, 8)
 
         // 确保 5 个维度都至少覆盖到
         const covered = new Set(validCases.map(c => c.category))
@@ -204,11 +207,11 @@ ${skill.body.substring(0, 3000)}
       const passed = result.passed === true
       const score = this.normalizeScore(result.score)
       const issues: TestIssue[] = Array.isArray(result.issues)
-        ? result.issues.map((i: any) => ({
-            severity: i.severity || 'minor',
-            description: i.description || '',
-            location: i.location,
-            suggestion: i.suggestion,
+        ? result.issues.map((i: TestIssue) => ({
+            severity: (i.severity as TestIssue['severity']) || 'minor',
+            description: (i.description as string) || '',
+            location: i.location as string | undefined,
+            suggestion: i.suggestion as string | undefined,
           }))
         : []
 
@@ -339,7 +342,7 @@ ${skill.body.substring(0, 3000)}
   /**
    * 规范化分数到 0-1 范围
    */
-  private normalizeScore(score: any): number {
+  private normalizeScore(score: unknown): number {
     const num = typeof score === 'number' ? score : parseFloat(String(score))
     if (isNaN(num)) return 0.5
     return Math.max(0, Math.min(1, num))

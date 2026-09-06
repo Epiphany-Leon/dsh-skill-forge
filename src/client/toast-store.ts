@@ -5,6 +5,8 @@
  * 不依赖 React Context，任何模块都可以 import 后直接使用。
  */
 
+import { API_BASE, POLL_INTERVAL_MS, TOAST_AUTO_DISMISS_MS, QUEUE_POLL_LIMIT } from './constants.js'
+
 export interface Toast {
   id: string
   runId: string
@@ -15,6 +17,14 @@ export interface Toast {
   createdAt: number
   /** 是否需要用户操作（待审核） */
   actionable: boolean
+}
+
+/** 最小化的 ForgeRun 结构（仅轮询所需字段） */
+interface PolledRun {
+  id: string
+  status: string
+  generatedSkill?: { frontmatter?: { name?: string } }
+  sourceSummary?: string
 }
 
 interface ToastState {
@@ -36,31 +46,27 @@ const state: ToastState = {
   listeners: new Set(),
 }
 
-const AUTO_DISMISS_MS = 8000
-const POLL_INTERVAL_MS = 5000
-const API_BASE = '/api/skill-forge'
-
 // ============ State helpers ============
 
-function emit() {
+function emit(): void {
   state.listeners.forEach(fn => fn())
 }
 
 function subscribeToast(fn: () => void): () => void {
   state.listeners.add(fn)
-  return () => state.listeners.delete(fn)
+  return () => { state.listeners.delete(fn) }
 }
 
-function addToast(toast: Toast) {
+function addToast(toast: Toast): void {
   state.toasts = [...state.toasts, toast]
   emit()
   // 非 actionable 的 toast 自动消失
   if (!toast.actionable) {
-    setTimeout(() => dismissToast(toast.id), AUTO_DISMISS_MS)
+    setTimeout(() => dismissToast(toast.id), TOAST_AUTO_DISMISS_MS)
   }
 }
 
-function dismissToast(id: string) {
+function dismissToast(id: string): void {
   state.toasts = state.toasts.filter(t => t.id !== id)
   emit()
 }
@@ -69,7 +75,7 @@ function getToasts(): Toast[] {
   return state.toasts
 }
 
-function setMuted(muted: boolean) {
+function setMuted(muted: boolean): void {
   state.muted = muted
   emit()
 }
@@ -84,13 +90,13 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 
 async function pollPendingRuns(): Promise<void> {
   try {
-    const res = await fetch(`${API_BASE}/queue?limit=20`, {
+    const res = await fetch(`${API_BASE}/queue?limit=${QUEUE_POLL_LIMIT}`, {
       headers: { 'Content-Type': 'application/json' },
     })
     if (!res.ok) return
-    const runs = await res.json()
+    const runs = await res.json() as PolledRun[]
 
-    const pendingRuns = runs.filter((r: any) => r.status === 'pending_approval')
+    const pendingRuns = runs.filter(r => r.status === 'pending_approval')
 
     for (const run of pendingRuns) {
       if (state.notifiedRuns.has(run.id)) continue
@@ -99,7 +105,7 @@ async function pollPendingRuns(): Promise<void> {
       state.notifiedRuns.add(run.id)
       const skillName =
         run.generatedSkill?.frontmatter?.name ||
-        run.sourceSummary?.substring(0, 30) ||
+        (run.sourceSummary?.substring(0, 30) ?? '') ||
         '未命名技能'
 
       addToast({
@@ -115,7 +121,7 @@ async function pollPendingRuns(): Promise<void> {
     }
 
     // 清理不再 pending 的 notified 记录（避免内存膨胀）
-    const pendingIds = new Set(pendingRuns.map((r: any) => r.id))
+    const pendingIds = new Set(pendingRuns.map(r => r.id))
     for (const id of state.notifiedRuns) {
       if (!pendingIds.has(id.replace('toast-', ''))) {
         state.notifiedRuns.delete(id)
@@ -130,7 +136,7 @@ function startPolling(): void {
   if (pollTimer) return
   pollTimer = setInterval(pollPendingRuns, POLL_INTERVAL_MS)
   // 立即跑一次
-  pollPendingRuns()
+  void pollPendingRuns()
 }
 
 function stopPolling(): void {
@@ -152,7 +158,7 @@ export const toastStore = {
   startPolling,
   stopPolling,
   /** 批准后清除对应 toast */
-  clearForRun(runId: string) {
+  clearForRun(runId: string): void {
     state.toasts = state.toasts.filter(t => t.runId !== runId)
     state.notifiedRuns.delete(`toast-${runId}`)
     state.notifiedRuns.delete(runId)

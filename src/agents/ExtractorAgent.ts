@@ -10,7 +10,7 @@ import type { ForgeRun, ExtractionResult, SkillForgeConfig } from '../types.js'
 import { SYSTEM_PROMPTS } from '../prompts/index.js'
 
 export class ExtractorAgent extends BaseAgent {
-  constructor(ctx: any, config: SkillForgeConfig) {
+  constructor(ctx: unknown, config: SkillForgeConfig) {
     super(ctx, config)
   }
 
@@ -53,7 +53,7 @@ ${conversationText}
 
       if (session?.messages) {
         return session.messages
-          .map((m: any) => {
+          .map((m: { role?: string; content?: string | unknown }) => {
             const role = m.role || 'unknown'
             const content = typeof m.content === 'string'
               ? m.content
@@ -71,25 +71,25 @@ ${conversationText}
   }
 
   /**
-   * 验证提取结果结构
+   * 验证提取结果结构（容错式，对 LLM 的动态输出做宽松校验）。
+   * 缺失字段时生成 fallback 值，确保流程能继续。
    */
-  private validateExtraction(raw: any): ExtractionResult {
-    const methodName = raw.methodName || raw.name || 'Unnamed Method'
-    let corePatterns = raw.corePatterns || raw.patterns || []
-    let keySteps = raw.keySteps || raw.steps || []
-    const applicableScenarios = raw.applicableScenarios || raw.scenarios || []
-    const toolsUsed = raw.toolsUsed || raw.tools || []
-    let confidence = Math.min(1, Math.max(0, raw.confidence || 0.5))
+  private validateExtraction(raw: { [key: string]: unknown }): ExtractionResult {
+    const methodName = String(raw.methodName ?? raw.name ?? 'Unnamed Method')
+    let corePatterns = this.asStringArray(raw.corePatterns ?? raw.patterns)
+    let keySteps = this.asStringArray(raw.keySteps ?? raw.steps)
+    const applicableScenarios = this.asStringArray(raw.applicableScenarios ?? raw.scenarios)
+    const toolsUsed = this.asStringArray(raw.toolsUsed ?? raw.tools)
+    const rawConfidence = typeof raw.confidence === 'number' ? raw.confidence : 0.5
+    let confidence = Math.min(1, Math.max(0, rawConfidence))
 
     // 基本完整性检查 — 如果提取结果为空，生成一个基础 fallback
-    // （手动触发或内容太少时，至少让流程能继续）
     if (corePatterns.length === 0 && keySteps.length === 0) {
-      // Fallback：从 sourceSummary 生成一个最小可用的提取结果
-      const summary = (raw.sourceSummary || 'extracted method').toString().substring(0, 100)
+      const summary = String(raw.sourceSummary ?? 'extracted method').substring(0, 100)
       corePatterns = [
         `Identify opportunities to apply ${summary}`,
-        `Follow the documented procedure systematically`,
-        `Verify results against expected outcomes`,
+        'Follow the documented procedure systematically',
+        'Verify results against expected outcomes',
       ]
       keySteps = [
         'Assess the situation and confirm applicability',
@@ -97,7 +97,7 @@ ${conversationText}
         'Verify results and adjust if needed',
         'Document learnings for future reference',
       ]
-      confidence = 0.7 // fallback 置信度（中等，够通过 Gate 1 但不足以自动批准）
+      confidence = 0.7
       this.log('warn', 'Extraction result was empty, using fallback patterns')
     }
 

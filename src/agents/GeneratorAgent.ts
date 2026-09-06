@@ -14,7 +14,7 @@ import type {
 import { SYSTEM_PROMPTS } from '../prompts/index.js'
 
 export class GeneratorAgent extends BaseAgent {
-  constructor(ctx: any, config: SkillForgeConfig) {
+  constructor(ctx: unknown, config: SkillForgeConfig) {
     super(ctx, config)
   }
 
@@ -75,12 +75,26 @@ ${extraction.toolsUsed.map(t => `- ${t}`).join('\n')}
   /**
    * 验证生成的技能
    */
-  private validateGeneratedSkill(raw: any): GeneratedSkill {
+  private validateGeneratedSkill(raw: { frontmatter?: { [key: string]: unknown }; body?: string; [key: string]: unknown }): GeneratedSkill {
     if (!raw.frontmatter || !raw.body) {
       throw new Error('Generated skill missing frontmatter or body')
     }
 
-    const fm = raw.frontmatter as SkillFrontmatter
+    const rawFm = raw.frontmatter
+    const fm: SkillFrontmatter = {
+      name: this.getString(rawFm, 'name', ''),
+      description: this.getString(rawFm, 'description', ''),
+      whenToUse: this.getString(rawFm, 'whenToUse', ''),
+      version: this.getString(rawFm, 'version', '1.0.0'),
+      tags: this.asStringArray(rawFm.tags),
+      author: typeof rawFm.author === 'string' ? rawFm.author : undefined,
+      source: (rawFm.source === 'forged' || rawFm.source === 'manual' || rawFm.source === 'imported')
+        ? rawFm.source
+        : 'forged',
+      forgedFrom: this.asStringArray(rawFm.forgedFrom),
+      category: typeof rawFm.category === 'string' ? rawFm.category : undefined,
+      qualityScore: typeof rawFm.qualityScore === 'number' ? rawFm.qualityScore : undefined,
+    }
 
     // 必要字段检查
     if (!fm.name || fm.name.length < 2) {

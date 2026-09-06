@@ -1,6 +1,41 @@
 # 项目进度：dsh-skill-forge
 
-> 最后更新：2026-09-03
+> 最后更新：2026-09-06
+
+---
+
+## v0.3.0 里程碑 ✅ 已发布
+
+### 总览
+- **版本**：v0.3.0
+- **状态**：已发布
+- **完成 Phase**：Phase 0 → Phase 6 全部完成
+- **Agent 数量**：6 个（Extractor / Generator / Verifier / Refiner / AdversarialTestGenerator / BaseAgent）
+- **服务模块**：12 个（ForgeOrchestrator / TriggerEngine / SkillRegistry / InjectionEngine / SecurityAuditor / SkillForgeService / DarwinOptimizer / TaotieFusion / CoEvoOrchestrator / DreamingEngine / SkillOrchestrator / BaseService）
+- **HTTP API 端点**：50+
+- **配置项**：50+
+
+### Phase 里程碑一览
+| Phase | 名称 | 状态 | 核心交付 |
+|-------|------|------|----------|
+| Phase 0 | 规划设计 | ✅ | PLAN.md + 生态调研 + 架构设计 |
+| Phase 1 | MVP 骨架 | ✅ | 基础锻造流水线 + UI 框架 |
+| Phase 2 | 核心功能 | ✅ | 锻造流水线跑通 + LLM 集成 + UI 升级 |
+| Phase 3 | 技能库 & 智能召回 | ✅ | 版本管理 + 谱系追踪 + 智能注入 + 统计仪表盘 |
+| Phase 4 | 产品化 & 发布 | ✅ | v0.1.0 发布 + 文档体系 + 社媒素材 |
+| Phase 5 | 技能进化与自我完善 | ✅ | 达尔文模式 + 饕餮模式 + 奖励学习 |
+| Phase 6 | 多 Agent 协作深化 | ✅ | CoEvo 共进化 + Dreaming 闲时锻造 + 技能编排 |
+
+### 基础设施与文档清理（本次）
+- [x] package.json 清理（版本号 0.1.0 → 0.3.0，scripts 补全）
+- [x] tsconfig 严格度检查（forceConsistentCasingInFileNames 开启）
+- [x] CHANGELOG.md 补全 v0.2.0 / v0.3.0 记录
+- [x] README 功能列表同步 Phase 6
+- [x] 文档一致性检查（docs/ 配置项补全）
+- [x] .editorconfig 新增
+- [x] .gitignore / .npmignore 完善
+- [x] STATUS.md 更新 v0.3.0 里程碑
+- [x] CONTRIBUTING.md 更新项目结构
 
 ---
 

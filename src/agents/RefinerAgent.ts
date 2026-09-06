@@ -19,6 +19,7 @@ import type {
   ForgeRun,
   SkillForgeConfig,
   QualityDimension,
+  SkillFrontmatter,
 } from '../types.js'
 import { QUALITY_DIMENSION_LABELS } from '../types.js'
 import { SYSTEM_PROMPTS } from '../prompts/index.js'
@@ -56,7 +57,7 @@ export interface RefineChangeSummary {
 }
 
 export class RefinerAgent extends BaseAgent {
-  constructor(ctx: any, config: SkillForgeConfig) {
+  constructor(ctx: unknown, config: SkillForgeConfig) {
     super(ctx, config)
   }
 
@@ -389,15 +390,26 @@ ${historyText}
   /**
    * 验证优化后的技能结构，做基本的合理性检查。
    */
-  private validateRefinedSkill(raw: any, original: GeneratedSkill): GeneratedSkill {
+  private validateRefinedSkill(
+    raw: { frontmatter?: { [key: string]: unknown }; body?: string; [key: string]: unknown },
+    original: GeneratedSkill,
+  ): GeneratedSkill {
     if (!raw.frontmatter || !raw.body) {
       throw new Error('Refined skill missing frontmatter or body')
     }
 
-    const fm = raw.frontmatter
+    const rawFm = raw.frontmatter
+    // 从原始技能的 frontmatter 作为基础（保证字段完整性），有修改的字段覆盖上去
+    const fm: SkillFrontmatter = {
+      ...original.frontmatter,
+      name: original.frontmatter.name, // 保持名称不变
+    }
 
-    // 保持名称不变
-    fm.name = original.frontmatter.name
+    // 应用 LLM 返回的字段覆盖（只覆盖已知字段
+    if (typeof rawFm.description === 'string') fm.description = rawFm.description
+    if (typeof rawFm.whenToUse === 'string') fm.whenToUse = rawFm.whenToUse
+    if (typeof rawFm.version === 'string') fm.version = rawFm.version
+    if (Array.isArray(rawFm.tags)) fm.tags = rawFm.tags.map(String)
 
     // 版本号自增兜底
     if (!fm.version || fm.version === original.frontmatter.version) {
@@ -410,10 +422,6 @@ ${historyText}
     if (raw.body.length < 50) {
       throw new Error('Refined skill body is too short')
     }
-
-    // 补充缺失的 frontmatter 字段（保持和原结构一致）
-    if (!fm.whenToUse) fm.whenToUse = original.frontmatter.whenToUse
-    if (!fm.description) fm.description = original.frontmatter.description
 
     return {
       frontmatter: fm,

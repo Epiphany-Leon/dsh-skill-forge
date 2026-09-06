@@ -364,7 +364,7 @@ export interface DarwinRun {
     overallAfter: number
     changeDescription: string
     /** 优化后的技能内容（批准后写入） */
-    proposedSkill: { frontmatter: any; body: string }
+    proposedSkill: GeneratedSkill
     /** 优化后的 9 维度得分 */
     proposedScores: Record<DarwinDimension, number>
     timestamp: number
@@ -1224,7 +1224,7 @@ export interface CoEvoRun {
     testStrengthAfter: number
     changeDescription: string
     /** 进化后的技能内容（批准后写入） */
-    proposedSkill?: { frontmatter: any; body: string }
+    proposedSkill?: GeneratedSkill
     /** 进化后的测试套件 */
     proposedTestSuite: AdversarialTestCase[]
     /** 新增测试用例 */
